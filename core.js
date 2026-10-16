@@ -32,7 +32,7 @@
     home: [['elec', 'Світло'], ['gas', 'Газ'], ['water', 'Вода'], ['heat', 'Опалення'], ['net', 'Інтернет і ТБ'], ['phone', 'Мобільний зв\u2019язок']],
     household: [['chem', 'Побутова хімія'], ['hyg', 'Гігієна'], ['repair', 'Ремонт та інструменти'], ['tech', 'Техніка'], ['decor', 'Меблі й декор']],
     health: [['pharm', 'Ліки'], ['doctor', 'Лікарі й аналізи'], ['dent', 'Стоматолог'], ['vit', 'Вітаміни']],
-    kids: [['school', 'Школа й садок'], ['clubs', 'Гуртки й секції'], ['toys', 'Іграшки'], ['clothes', 'Одяг і взуття']],
+    kids: [['school', 'Школа й садок'], ['clubs', 'Гуртки й секції'], ['toys', 'Іграшки'], ['clothes', 'Одяг і взуття'], ['stationery', 'Канцтовари'], ['trifles', 'Дурниці']],
     fun: [['gifts', 'Подарунки'], ['cinema', 'Кіно й розваги'], ['hobby', 'Хобі'], ['trip', 'Відпочинок і подорожі'], ['subs', 'Підписки']]
   };
   function defaultSubs(catId) { return (DEFAULT_SUBS[catId] || []).map(function (x) { return { id: x[0], name: x[1] }; }); }
@@ -80,13 +80,14 @@
 
   // ---------- Стан ----------
   var NEW_SHOPS = ['Сільпо', 'АТБ', 'Маудау', 'Інтернет магазини'];
-  var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'].concat(NEW_SHOPS);
+  var NEW_SHOPS3 = ['Аврора', 'Базар'];
+  var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'].concat(NEW_SHOPS, NEW_SHOPS3);
   function cleanShops(a) {
     var seen = {}, out = [];
     (Array.isArray(a) ? a : []).forEach(function (x) { var n = String(x == null ? '' : x).trim().replace(/\s+/g, ' ').slice(0, 30); var k = n.toLowerCase(); if (n && !seen[k] && out.length < 30) { seen[k] = 1; out.push(n); } });
     return out;
   }
-  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], updatedAt: 0 }; }
+  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], otherSubs: [], updatedAt: 0 }; }
   function freshState() {
     return {
       v: 1, txs: {}, cfg: defaultCfg(), cfgDirty: false,
@@ -124,6 +125,7 @@
       memberLimits: cleanMap(c.memberLimits, /^.{1,40}$/, 30),
       shops: Array.isArray(c.shops) ? cleanShops(c.shops) : DEFAULT_SHOPS.slice(),
       clubs: cleanShops(c.clubs),
+      otherSubs: cleanSubs(c.otherSubs),
       updatedAt: Number(c.updatedAt) || 0
     };
   }
@@ -167,6 +169,28 @@
         if (S.cfg.updatedAt === 0 && !S.cfgDirty) save(); else touchCfg();
       } else save();
     }
+    // Ще раз те саме для магазинів «Аврора» й «Базар»
+    if (!S.meta.mShops3) {
+      S.meta.mShops3 = 1;
+      var have3 = {}; S.cfg.shops.forEach(function (n) { have3[n.toLowerCase()] = 1; });
+      var add3 = NEW_SHOPS3.filter(function (n) { return !have3[n.toLowerCase()]; });
+      if (add3.length && S.cfg.shops.length) {
+        S.cfg.shops = cleanShops(S.cfg.shops.concat(add3));
+        if (S.cfg.updatedAt === 0 && !S.cfgDirty) save(); else touchCfg();
+      } else save();
+    }
+    // Один раз додаємо до «Дітей» види «Канцтовари» й «Дурниці» (якщо їх там ще немає)
+    if (!S.meta.mKidsSubs) {
+      S.meta.mKidsSubs = 1;
+      var kids = S.cfg.categories.filter(function (c) { return c.id === 'kids'; })[0]; var changed = false;
+      if (kids && Array.isArray(kids.subs)) {
+        [['stationery', 'Канцтовари'], ['trifles', 'Дурниці']].forEach(function (x) {
+          if (kids.subs.length >= MAX_SUBS || kids.subs.some(function (y) { return y.name.toLowerCase() === x[1].toLowerCase(); })) return;
+          kids.subs.push({ id: kids.subs.some(function (y) { return y.id === x[0]; }) ? 's_' + rid(6) : x[0], name: x[1] }); changed = true;
+        });
+      }
+      if (changed && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
+    }
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
     if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; return; }
     // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
@@ -187,7 +211,7 @@
   var SUB_TAIL = /\|([a-z0-9_]{1,12})$/;
   function subIdOfCn(cn) { var m = SUB_TAIL.exec(String(cn || '')); return m ? m[1] : ''; }
   function stripSub(cn) { return String(cn || '').replace(SUB_TAIL, ''); }
-  function catSubs(catId) { var c = S.cfg.categories.filter(function (x) { return x.id === catId; })[0]; return c && c.subs ? c.subs : []; }
+  function catSubs(catId) { if (catId === 'other') return S.cfg.otherSubs || []; var c = S.cfg.categories.filter(function (x) { return x.id === catId; })[0]; return c && c.subs ? c.subs : []; }
   function subsOf(catId) { return catSubs(catId).map(function (x) { return { id: x.id, name: x.name }; }); }
   function validSub(catId, sub) { return sub && catSubs(catId).some(function (x) { return x.id === sub; }) ? String(sub) : ''; }
   function subOf(t) {
@@ -198,7 +222,11 @@
     var n = 0; Object.keys(S.txs).forEach(function (k) { var t = S.txs[k]; if (!t.deleted && t.category === catId && subIdOfCn(t.cn) === subId) n++; });
     return n;
   }
-  function findCat(catId) { return S.cfg.categories.filter(function (x) { return x.id === catId; })[0]; }
+  // «Інше» не входить до списку категорій, тому його види лежать в окремому полі cfg.otherSubs
+  function findCat(catId) {
+    if (catId === 'other') return { id: 'other', get subs() { return S.cfg.otherSubs || []; }, set subs(v) { S.cfg.otherSubs = v; } };
+    return S.cfg.categories.filter(function (x) { return x.id === catId; })[0];
+  }
   function addSub(catId, name) {
     var c = findCat(catId); if (!c) return { error: 'Категорію не знайдено.' };
     name = cleanSubName(name); if (!name) return { error: 'Введіть назву виду.' };
@@ -208,6 +236,13 @@
     var id; do { id = 's_' + rid(6); } while (c.subs.some(function (x) { return x.id === id; }));
     var sub = { id: id, name: name }; c.subs.push(sub); touchCfg();
     return { sub: sub };
+  }
+  // Для поля «свій вид» у формі: бере наявний вид із такою назвою або створює новий
+  function ensureSub(catId, name) {
+    var c = findCat(catId); if (!c) return { error: 'Категорію не знайдено.' };
+    var clean = cleanSubName(name); if (!clean) return { error: 'Введіть назву виду.' };
+    var ex = (c.subs || []).filter(function (x) { return x.name.toLowerCase() === clean.toLowerCase(); })[0];
+    return ex ? { sub: ex, existing: true } : addSub(catId, clean);
   }
   function renameSub(catId, subId, name) {
     var c = findCat(catId); var sub = c && (c.subs || []).filter(function (x) { return x.id === subId; })[0];
@@ -1059,7 +1094,7 @@
     // категорії та бюджет
     categories: categories, catById: catById, catUsage: catUsage, addCategory: addCategory, updateCategory: updateCategory, removeCategory: removeCategory, setBudget: setBudget, setCurrency: setCurrency,
     // витрати
-    addTx: addTx, updateTx: updateTx, setDeleted: setDeleted, restoreSnapshot: restoreSnapshot, monthTxs: monthTxs, monthKind: monthKind, monthFlow: monthFlow, incomeBySource: incomeBySource, normalizeCfg: normalizeCfg, cfgPayload: cfgPayload, subTotals: subTotals, subOf: subOf, subsOf: subsOf, addSub: addSub, renameSub: renameSub, removeSub: removeSub, subUsage: subUsage, MAX_SUBS: MAX_SUBS, FOOD_ID: FOOD_ID, allLive: allLive, kindOf: kindOf, catInfo: catInfo, resolveCat: resolveCat, INCOME_CATS: INCOME_CATS, catMonthTxs: catMonthTxs, catSeries: catSeries, groupByNote: groupByNote, spentByCategory: spentByCategory, byMember: byMember, dailySeries: dailySeries, monthsSeries: monthsSeries, members: members, sum: sum,
+    addTx: addTx, updateTx: updateTx, setDeleted: setDeleted, restoreSnapshot: restoreSnapshot, monthTxs: monthTxs, monthKind: monthKind, monthFlow: monthFlow, incomeBySource: incomeBySource, normalizeCfg: normalizeCfg, cfgPayload: cfgPayload, subTotals: subTotals, subOf: subOf, subsOf: subsOf, addSub: addSub, renameSub: renameSub, ensureSub: ensureSub, removeSub: removeSub, subUsage: subUsage, MAX_SUBS: MAX_SUBS, FOOD_ID: FOOD_ID, allLive: allLive, kindOf: kindOf, catInfo: catInfo, resolveCat: resolveCat, INCOME_CATS: INCOME_CATS, catMonthTxs: catMonthTxs, catSeries: catSeries, groupByNote: groupByNote, spentByCategory: spentByCategory, byMember: byMember, dailySeries: dailySeries, monthsSeries: monthsSeries, members: members, sum: sum,
     monthBudget: monthBudget, overview: overview, setMonthBudget: setMonthBudget, setMemberLimit: setMemberLimit, monthSummary: monthSummary,
     // цілі, кредити, швидке додавання
     goalInfo: goalInfo, addGoal: addGoal, updateGoal: updateGoal, removeGoal: removeGoal, addContribution: addContribution, goalById: goalById,
@@ -1074,7 +1109,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v14', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v16', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

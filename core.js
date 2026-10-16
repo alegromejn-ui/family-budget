@@ -5,7 +5,7 @@
 
   var KEY = 'fb_state_v1';
   var NUTRIPLAN_KEY = 'nutriplan_user_gemini_key';
-  var GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
+  var GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
   var MAX_COLORED = 10;
   var CURRENCIES = ['₴', '$', '€', 'zł', '£'];
 
@@ -730,21 +730,24 @@
   async function geminiRequest(payload) {
     var apiKey = geminiKey();
     if (!apiKey) { var e0 = new Error('NO_KEY'); e0.code = 'NO_KEY'; throw e0; }
-    var delays = FB.geminiDelays; var lastErr = null;
+    var delays = FB.geminiDelays; var used = 0; var lastErr = null; var softErr = null;
+    // Повтори (пауза між ними) спільні для всіх моделей: перевантажена модель не змушує чекати кілька разів поспіль.
     for (var mi = 0; mi < GEMINI_MODELS.length; mi++) {
       var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODELS[mi] + ':generateContent';
-      for (var attempt = 0; attempt <= delays.length; attempt++) {
+      for (;;) {
         var res;
         try { res = await FB.fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, body: JSON.stringify(payload) }); }
-        catch (ne) { lastErr = new Error('NETWORK'); lastErr.code = 'NETWORK'; if (attempt === delays.length) break; await sleep(delays[attempt]); continue; }
+        catch (ne) { lastErr = softErr = new Error('NETWORK'); lastErr.code = 'NETWORK'; if (used >= delays.length) break; await sleep(delays[used++]); continue; }
         if (res.ok) return res.json();
         lastErr = new Error('HTTP ' + res.status); lastErr.code = 'HTTP_' + res.status; lastErr.status = res.status;
         lastErr.model = GEMINI_MODELS[mi]; lastErr.detail = await errorDetail(res);
         if (res.status === 404) break;
-        if (res.status === 429 || res.status >= 500) { if (attempt === delays.length) break; await sleep(delays[attempt]); continue; }
+        if (res.status === 429 || res.status >= 500) { softErr = lastErr; if (used >= delays.length) break; await sleep(delays[used++]); continue; }
         throw lastErr;
       }
     }
+    // «Модель недоступна» (404) не має перекривати справжню причину: перевантаження чи ліміт.
+    if (lastErr && lastErr.status === 404 && softErr) throw softErr;
     throw lastErr || new Error('UNKNOWN');
   }
   // Діагностика ключа: кожен крок показує код і пояснення Google (ключ ніколи не потрапляє в адресу чи результат).
@@ -780,7 +783,7 @@
     }
     if (st === 404) return 'Жодна з моделей Gemini недоступна для вашого ключа.';
     if (st === 429) return 'Перевищено ліміт запитів Gemini. Зачекайте хвилину.';
-    if (st >= 500) return 'Сервіс Gemini тимчасово недоступний. Спробуйте пізніше.';
+    if (st >= 500) return 'Моделі Gemini зараз перевантажені (код ' + st + '). Спробуйте ще раз за кілька хвилин.';
     return 'Не вдалося розпізнати чек. Введіть суму вручну.';
   }
   function receiptPayload(base64, mime) {
@@ -899,7 +902,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, VERSION: 'v8', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, VERSION: 'v9', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

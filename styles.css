@@ -286,3 +286,10 @@ section + .btn { margin-top: 26px; }
 .lrow.sub .val { color: var(--ink2); font-size: 14px; }
 .ledger > li.subli { padding: 3px 0; border-top: 0; }
 .ledger > li.subli:last-of-type { padding-bottom: 10px; }
+
+.selwrap { display: grid; gap: 6px; min-width: 0; }
+.selwrap .in { width: 100%; }
+.subrow .quick { margin-top: 6px; }
+.sub-edit { grid-template-columns: 1fr auto; }
+.edit-row .subline { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 10px; background: var(--wash); color: var(--ink2); font-size: 13px; text-align: left; }
+.edit-row .subline span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -113,8 +113,8 @@
   }
 
   function txRowHtml(t) {
-    var c = F.catInfo(t); var title = t.note || c.name;
-    var sub = (t.note ? c.name + ', ' : '') + (t.member || '');
+    var c = F.catInfo(t); var sb = F.subOf(t); var cname = c.name + (sb ? ' · ' + sb.name : ''); var title = t.note || cname;
+    var sub = (t.note ? cname + ', ' : '') + (t.member || '');
     var amt = c.kind === 'income' ? signedMoney(t.amount) : c.kind === 'saving' ? (t.amount < 0 ? 'зняття ' + money(-t.amount) : signedMoney(t.amount)) : money(t.amount);
     return '<button class="txrow" data-act="edit" data-id="' + esc(t.id) + '">' + catDot(c) + '<span class="main"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></span><span class="amt num">' + esc(amt) + '</span></button>';
   }
@@ -297,6 +297,20 @@
     }
     return h + '<p class="note" style="margin-top:10px">' + hint + '</p></div></section>';
   }
+  // «<Категорія> за видами»: показуємо, лише якщо в місяці є витрати з уточненим видом
+  function typesReport(c, withNote) {
+    var ft = F.subTotals(ym, c.id); if (!ft.items.length) return '';
+    var total = ft.total;
+    var h = '<section class="sec"><div class="sec-h"><h2>' + esc(c.name) + ' за видами</h2></div><div class="panel">';
+    if (repMode === 'table') {
+      h += '<table class="t"><thead><tr><th>Вид</th><th>Сума</th><th>Частка</th></tr></thead><tbody>' + ft.items.concat(ft.none.count ? [{ name: 'Вид не вказано', total: ft.none.total }] : []).map(function (x) { return '<tr><td>' + esc(x.name) + '</td><td class="num">' + money(x.total) + '</td><td class="num">' + Math.round(x.total / total * 100) + '%</td></tr>'; }).join('') + '</tbody></table>';
+    } else {
+      var rows = ft.items.map(function (x, i) { var k = i % F.MAX_COLORED; return { name: x.name, value: x.total, cls: 'c' + k, dot: '<i class="dot c' + k + '" aria-hidden="true"></i>' }; });
+      if (ft.none.count) rows.push({ name: 'Вид не вказано', value: ft.none.total, cls: '', dot: '<i class="dot" aria-hidden="true"></i>' });
+      h += barRows(rows, total);
+    }
+    return h + (withNote ? '<p class="note" style="margin-top:10px">Вид обирається у формі витрати. Скан чека визначає його сам. Перелік видів можна змінити в «Бюджет і категорії».</p>' : '') + '</div></section>';
+  }
   function viewReports() {
     var h = top('Звіти') + monthNav() + seg();
     var total = F.sum(F.monthTxs(ym));
@@ -326,6 +340,7 @@
       }
       h += '</div></section>';
     }
+    var shownTypes = 0; cats.forEach(function (c) { if (shownTypes >= 3 || c.id === 'other') return; var x = typesReport(c, shownTypes === 0); if (x) { h += x; shownTypes++; } });
     h += tagReport('shops', 'По магазинах', 'Інші покупки', total, 'Магазин береться з початку нотатки. Додайте його у формі витрати.');
     h += tagReport('clubs', 'По гуртках', 'Решта витрат', total, 'Гурток береться з початку нотатки. Додайте його у формі витрати.');
     h += '<section class="sec"><div class="sec-h"><h2>Останні шість місяців</h2></div><div class="panel">';
@@ -364,6 +379,7 @@
       h += '<section class="sec"><div class="sec-h"><h2>Динаміка</h2></div><div class="panel"><div class="cols">' + colsSvg(series, c.limit, 'ліміт') + '</div></div></section>';
     }
     if (list.length) {
+      if (c.id !== 'other') h += typesReport(c, true);
       var groups = F.groupByNote(list);
       if (groups.length > 1 || (groups[0] && groups[0].name)) {
         h += '<section class="sec"><div class="sec-h"><h2>На що пішло</h2></div><div class="panel"><ul class="ledger">' + groups.map(function (g) {
@@ -482,6 +498,23 @@
     var n = $('#tx-note'); if (!n) return;
     $$('[data-act=shop]').forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 's') === F.tagOf({ note: n.value }, attr(b, 'k')))); });
   }
+  function subChipsHtml(catId, cur) {
+    return [{ id: '', name: 'Без виду' }].concat(F.subsOf(catId)).map(function (x) { return '<button type="button" class="chip" data-act="sub" data-s="' + esc(x.id) + '" aria-pressed="' + (x.id === cur) + '">' + esc(x.name) + '</button>'; }).join('');
+  }
+  function subRowHtml(kind, selId, t) {
+    var cur = t && F.subOf(t) ? F.subOf(t).id : ''; var show = kind === 'expense' && F.subsOf(selId).length > 0;
+    return '<div class="subrow" id="tx-sub" data-cat="' + esc(selId) + '"' + (show ? '' : ' hidden') + '><p class="lbl">Вид</p><div class="quick" id="tx-sub-chips" role="group" aria-label="Вид витрати">' + subChipsHtml(selId, cur) + '</div></div>';
+  }
+  function setSub(id) { $$('[data-act=sub]').forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 's') === id)); }); }
+  function subValue() { var w = $('#tx-sub'); if (!w || w.hidden) return ''; var b = $('[data-act=sub][aria-pressed=true]', w); return b ? attr(b, 's') : ''; }
+  // Після зміни категорії показуємо її власні види (або ховаємо рядок, якщо їх немає)
+  function syncSub() {
+    var w = $('#tx-sub'); if (!w) return; var r = $('input[name=cat]:checked', w.closest('form') || document); var id = r ? r.value : '';
+    var form = w.closest('form'); var expense = !form || attr(form, 'kind') !== 'saving' && attr(form, 'kind') !== 'income';
+    var has = expense && F.subsOf(id).length > 0;
+    if (w.getAttribute('data-cat') !== id) { w.setAttribute('data-cat', id); $('#tx-sub-chips').innerHTML = subChipsHtml(id, ''); }
+    w.hidden = !has; if (!has) setSub('');
+  }
   function catGridHtml(kind, selId, t) {
     var items;
     if (kind === 'income') items = F.INCOME_CATS.map(function (c) { return { id: c.id, name: c.name, dot: '<i class="dot inc" aria-hidden="true"></i>' }; });
@@ -509,6 +542,7 @@
         var c = F.catById(q.category); return '<button type="button" class="chip" data-act="quick" data-i="' + n + '">' + catDot(c) + esc((q.note || c.name) + ' ' + money(q.amount)) + '</button>';
       }).join('') + '</div>' : '') +
       '<div class="catgrid" id="tx-cats" role="radiogroup" aria-label="Категорія">' + catGridHtml(kind, selId, t) + '</div>' +
+      subRowHtml(kind, selId, t) +
       tagRows(kind, t) +
       '<div class="row2"><label class="field"><span>Дата</span><input class="in" type="date" id="tx-date" value="' + esc(t ? t.date : F.todayStr()) + '"></label>' +
       '<label class="field"><span>Нотатка</span><input class="in" id="tx-note" maxlength="200" list="note-list" autocomplete="off" placeholder="За бажанням" value="' + esc(t ? t.note : '') + '"></label></div>' +
@@ -521,7 +555,7 @@
   function submitTx(form) {
     var id = attr(form, 'id'); var kind = attr(form, 'kind'); var cat = $('input[name=cat]:checked', form);
     if (!cat) return showErr('tx-err', kind === 'saving' ? 'Спершу створіть ціль у «Ще».' : 'Оберіть категорію.');
-    var p = { amount: $('#tx-amount').value, category: cat.value, date: $('#tx-date').value, note: $('#tx-note').value };
+    var p = { amount: $('#tx-amount').value, category: cat.value, sub: subValue(), date: $('#tx-date').value, note: $('#tx-note').value };
     var label = function (tx) { var c = F.catInfo(tx); return c.kind === 'income' ? 'Дохід додано: ' + c.name + ', ' + signedMoney(tx.amount) : c.kind === 'saving' ? 'Внесок записано: ' + c.name + ', ' + signedMoney(tx.amount) : 'Додано: ' + c.name + ', ' + money(tx.amount); };
     if (id) {
       var r = F.updateTx(id, p); if (r.error) return showErr('tx-err', r.error);
@@ -535,20 +569,21 @@
   var splitCtx = null;
   function shouldSplit(r) {
     if (!(r && r.total && r.items && r.items.length >= 2)) return false;
-    var seen = {}; r.items.forEach(function (x) { seen[x.category] = 1; }); return Object.keys(seen).length >= 2;
+    var seen = {}; r.items.forEach(function (x) { seen[x.category + '|' + (x.sub || '')] = 1; }); return Object.keys(seen).length >= 2;
   }
   function catOptions(sel) { return F.categories().map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === sel ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join(''); }
-  function splitRowHtml(name, amount, cat) {
+  function subOptions(catId, sel) { return [{ id: '', name: 'Вид не вказано' }].concat(F.subsOf(catId)).map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === (sel || '') ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join(''); }
+  function splitRowHtml(name, amount, cat, sub) {
     return '<div class="split-row"><span class="sname">' + esc(name) + '</span><input class="in" inputmode="decimal" autocomplete="off" aria-label="Сума: ' + esc(name) + '" value="' + esc(String(amount).replace('.', ',')) + '">' +
-      '<select class="in" aria-label="Категорія: ' + esc(name) + '">' + catOptions(cat) + '</select><button type="button" class="ibtn" data-act="split-del" aria-label="Прибрати: ' + esc(name) + '">' + ic('x') + '</button></div>';
+      '<span class="selwrap"><select class="in cat" aria-label="Категорія: ' + esc(name) + '">' + catOptions(cat) + '</select><select class="in sub" data-cat="' + esc(cat) + '" aria-label="Вид: ' + esc(name) + '"' + (F.subsOf(cat).length ? '' : ' hidden') + '>' + subOptions(cat, sub) + '</select></span><button type="button" class="ibtn" data-act="split-del" aria-label="Прибрати: ' + esc(name) + '">' + ic('x') + '</button></div>';
   }
   function openSplit(r, formDate) {
     splitCtx = { total: r.total, currency: r.currency, items: r.items, itemsSum: r.itemsSum, merchant: r.merchant };
-    var rows = r.items.map(function (x) { return splitRowHtml(x.name || 'Позиція', x.amount, x.category); });
+    var rows = r.items.map(function (x) { return splitRowHtml(x.name || 'Позиція', x.amount, x.category, x.sub); });
     var rest = F.round2(r.total - r.itemsSum);
     if (rest > 0.009) rows.push(splitRowHtml('Решта чека (знижки, нерозпізнане)', rest, 'other'));
     var c = r.currency ? (CUR_MAP[r.currency.toUpperCase()] || r.currency) : ''; var curWarn = c && c !== cur() ? ' На чеку валюта ' + c + ', а в додатку ' + cur() + ': перевірте суми.' : '';
-    var html = '<form data-form="split" novalidate>' + sheetTop('Чек по категоріях', 'Покупки з чека розкладено по категоріях. Перевірте суми й за потреби змініть категорію. Для кожної категорії буде записано окрему витрату.' + esc(curWarn)) +
+    var html = '<form data-form="split" novalidate>' + sheetTop('Чек по категоріях', 'Покупки з чека розкладено по категоріях. Перевірте суми й за потреби змініть категорію. Для кожної категорії (і виду) буде записано окрему витрату.' + esc(curWarn)) +
       '<div class="row2"><label class="field"><span>Дата</span><input class="in" type="date" id="sp-date" value="' + esc(r.date || formDate || F.todayStr()) + '"></label>' +
       '<label class="field"><span>Магазин</span><input class="in" id="sp-note" maxlength="200" list="note-list" autocomplete="off" placeholder="За бажанням" value="' + esc(r.merchant) + '"></label></div>' +
       '<datalist id="note-list">' + F.noteSuggestions().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
@@ -558,14 +593,19 @@
     openSheet(html); updateSplit();
   }
   function splitRows() {
-    return $$('#split-list .split-row').map(function (row) { var i = $('input', row), s = $('select', row); return { raw: i.value, amount: F.parseAmount(i.value), category: s.value, name: $('.sname', row).textContent }; });
+    return $$('#split-list .split-row').map(function (row) {
+      var i = $('input', row), s = $('select.cat', row), sb = $('select.sub', row);
+      if (sb.getAttribute('data-cat') !== s.value) { sb.setAttribute('data-cat', s.value); sb.innerHTML = subOptions(s.value, ''); }
+      sb.hidden = !F.subsOf(s.value).length; if (sb.hidden) sb.value = '';
+      return { raw: i.value, amount: F.parseAmount(i.value), category: s.value, sub: sb.value, name: $('.sname', row).textContent };
+    });
   }
   function updateSplit() {
     var box = $('#split-sum'); if (!box || !splitCtx) return; var rows = splitRows();
     var bad = rows.some(function (x) { return x.amount == null; }); var by = {}, order = [], total = 0;
-    rows.forEach(function (x) { if (x.amount == null) return; total += x.amount; if (!(x.category in by)) { by[x.category] = 0; order.push(x.category); } by[x.category] += x.amount; });
+    rows.forEach(function (x) { if (x.amount == null) return; total += x.amount; var k = x.category + '|' + x.sub; if (!(k in by)) { by[k] = 0; order.push(k); } by[k] += x.amount; });
     total = F.round2(total);
-    var h = order.length ? '<ul class="ledger">' + order.map(function (id) { var c = F.catById(id); return '<li><span class="lrow"><span class="name">' + catDot(c) + '<b>' + esc(c.name) + '</b></span><span class="lead"></span><span class="val num">' + money(F.round2(by[id])) + '</span></span></li>'; }).join('') + '</ul>' : '<p class="hint">Усі позиції прибрано.</p>';
+    var h = order.length ? '<ul class="ledger">' + order.map(function (k) { var pr = k.split('|'); var c = F.catById(pr[0]); var sb = F.subsOf(pr[0]).filter(function (x) { return x.id === pr[1]; })[0]; return '<li><span class="lrow"><span class="name">' + catDot(c) + '<b>' + esc(c.name + (sb ? ' · ' + sb.name : '')) + '</b></span><span class="lead"></span><span class="val num">' + money(F.round2(by[k])) + '</span></span></li>'; }).join('') + '</ul>' : '<p class="hint">Усі позиції прибрано.</p>';
     h += '<p class="lrow" style="padding-top:8px"><span class="name"><b>Разом</b></span><span class="lead"></span><span class="val num">' + money(total) + '</span></p>';
     if (bad) h += '<p class="status bad">' + ic('alert', 'sm') + 'У деяких рядках сума не число більше нуля.</p>';
     else if (Math.abs(total - splitCtx.total) > 0.009) h += '<p class="status' + (total > splitCtx.total ? ' bad' : '') + '">' + (total > splitCtx.total ? ic('alert', 'sm') : '') + 'На чеку ' + money(splitCtx.total) + (total > splitCtx.total ? '. Можливо, не враховано знижку.' : '.') + '</p>';
@@ -573,7 +613,7 @@
     var n = order.length; var b = $('#split-save'); if (b) { b.textContent = n ? 'Записати ' + n + ' ' + plural(n, 'витрату', 'витрати', 'витрат') : 'Записати'; b.disabled = !n; }
   }
   function submitSplit() {
-    var rows = splitRows(); var res = F.addSplit({ date: $('#sp-date').value, note: $('#sp-note').value, rows: rows.map(function (x) { return { category: x.category, amount: x.raw }; }) });
+    var rows = splitRows(); var res = F.addSplit({ date: $('#sp-date').value, note: $('#sp-note').value, rows: rows.map(function (x) { return { category: x.category, sub: x.sub, amount: x.raw }; }) });
     if (res.error) return showErr('split-err', res.error);
     var sum = F.round2(res.txs.reduce(function (t, x) { return t + x.amount; }, 0)); var n = res.txs.length; splitCtx = null;
     closeSheet(); render(); toast('Записано ' + n + ' ' + plural(n, 'витрату', 'витрати', 'витрат') + ' на ' + money(sum), 'Скасувати', function () { res.txs.forEach(function (t) { F.setDeleted(t.id, true); }); render(); }, 7000);
@@ -586,7 +626,7 @@
       if (shouldSplit(r)) { openSplit(r, formDate); return; }
       if (r.total) { $('#tx-amount').value = String(r.total).replace('.', ','); parts.push('суму'); }
       if (r.date) { $('#tx-date').value = r.date; parts.push('дату'); }
-      var radio = $('#cat-' + r.category); if (radio) { radio.checked = true; parts.push('категорію'); }
+      var radio = $('#cat-' + r.category); if (radio) { radio.checked = true; syncSub(); parts.push('категорію'); }
       if (r.merchant && !$('#tx-note').value.trim()) { $('#tx-note').value = r.merchant; parts.push('магазин'); }
       if (!r.total) { note.className = 'note bad'; note.textContent = 'Суму на чеку не видно. Введіть її вручну або сфотографуйте ще раз.'; }
       else {
@@ -611,13 +651,29 @@
       cats.map(function (c) {
         return '<div class="edit-row">' + '<label class="sr" for="cn-' + esc(c.id) + '">Назва</label><input class="in" id="cn-' + esc(c.id) + '" maxlength="30" value="' + esc(c.name) + '" data-change="cat-name" data-id="' + esc(c.id) + '">' +
           '<label class="sr" for="cl-' + esc(c.id) + '">Ліміт</label><input class="in" id="cl-' + esc(c.id) + '" inputmode="decimal" placeholder="Ліміт" value="' + (c.limit ? esc(String(c.limit).replace('.', ',')) : '') + '" data-change="cat-limit" data-id="' + esc(c.id) + '">' +
-          '<button class="ibtn" data-act="cat-del" data-id="' + esc(c.id) + '" aria-label="Видалити категорію ' + esc(c.name) + '">' + ic('trash') + '</button></div>';
+          '<button class="ibtn" data-act="cat-del" data-id="' + esc(c.id) + '" aria-label="Видалити категорію ' + esc(c.name) + '">' + ic('trash') + '</button>' +
+          '<button type="button" class="subline" data-act="subs" data-id="' + esc(c.id) + '" data-from="budget" aria-label="Види категорії ' + esc(c.name) + '"><span>' + (c.subs && c.subs.length ? 'Види: ' + c.subs.length + '. ' + esc(c.subs.map(function (x) { return x.name; }).join(', ')) : 'Додати види') + '</span>' + ic('right', 'sm') + '</button></div>';
       }).join('') +
       '<p class="note">Ще є «Інше»: вона завжди залишається.</p>' +
       '<h3 style="margin-top:20px;font-size:16px">Ліміти на людину на місяць</h3><p class="note" style="margin-top:2px">Наприклад, кишенькові гроші. Порожнє поле означає без ліміту.</p>' +
       F.members().map(function (n, k) { return '<label class="field" style="margin-top:10px"><span>' + esc(n) + '</span><input class="in" inputmode="decimal" placeholder="Без ліміту" value="' + (S.cfg.memberLimits[n] ? esc(String(S.cfg.memberLimits[n]).replace('.', ',')) : '') + '" data-change="member-limit" data-name="' + esc(n) + '"></label>'; }).join('') +
       (cats.length < F.MAX_COLORED ? '<form data-form="cat-add" class="edit-row" style="grid-template-columns:1fr auto"><label class="sr" for="cat-new">Нова категорія</label><input class="in" id="cat-new" maxlength="30" placeholder="Нова категорія"><button class="btn sm" type="submit">Додати</button></form>' : '<p class="note">Досягнуто межі в ' + F.MAX_COLORED + ' категорій.</p>') +
       '<button class="btn" data-act="close">Готово</button>';
+    openSheet(html, { keepScroll: keep });
+  }
+
+  // --- Види категорії ---
+  function openSubs(catId, from, keep) {
+    var c = F.state.cfg.categories.filter(function (x) { return x.id === catId; })[0]; if (!c) return;
+    var subs = c.subs || [];
+    var html = sheetTop('Види: ' + c.name, 'Допомагають бачити, на що саме йдуть гроші в категорії. Зміни зберігаються одразу й з’являються в усієї родини.') +
+      (subs.length ? subs.map(function (x) {
+        return '<div class="edit-row sub-edit"><label class="sr" for="sn-' + esc(x.id) + '">Назва виду</label><input class="in" id="sn-' + esc(x.id) + '" maxlength="30" value="' + esc(x.name) + '" data-change="sub-name" data-id="' + esc(c.id) + '" data-s="' + esc(x.id) + '">' +
+          '<button class="ibtn" data-act="sub-del" data-id="' + esc(c.id) + '" data-s="' + esc(x.id) + '" data-from="' + esc(from || '') + '" aria-label="Видалити вид ' + esc(x.name) + '">' + ic('trash') + '</button></div>';
+      }).join('') : '<p class="hint">Видів ще немає. Додайте перший, і він з’явиться у формі витрати.</p>') +
+      '<p class="note">Видалений вид не стирає записи: вони лишаються в категорії без уточнення виду.</p>' +
+      (subs.length < F.MAX_SUBS ? '<form data-form="sub-add" data-id="' + esc(c.id) + '" data-from="' + esc(from || '') + '" class="edit-row sub-edit"><label class="sr" for="sub-new">Новий вид</label><input class="in" id="sub-new" maxlength="30" autocomplete="off" placeholder="Новий вид"><button class="btn sm" type="submit">Додати</button></form>' : '<p class="note">Досягнуто ліміт: ' + F.MAX_SUBS + ' видів у категорії.</p>') +
+      '<button class="btn" data-act="subs-done" data-from="' + esc(from || '') + '">Готово</button>';
     openSheet(html, { keepScroll: keep });
   }
 
@@ -891,10 +947,18 @@
       $('#tx-cats').innerHTML = catGridHtml(k, k === 'expense' ? F.state.meta.lastCat : 'in_salary', null);
       $('#tx-title').textContent = TX_TITLE[k][0];
       var q = $('#tx-quick'); if (q) q.hidden = k !== 'expense'; $('#tx-scan-wrap').hidden = k !== 'expense'; $$('.tagrow').forEach(function (e) { e.hidden = k !== 'expense'; });
+      syncSub();
+    },
+    sub: function (el) { setSub(attr(el, 's')); },
+    subs: function (el) { openSubs(attr(el, 'id'), attr(el, 'from')); },
+    'subs-done': function (el) { if (attr(el, 'from') === 'budget') { openBudget(); } else closeSheet(); render(); },
+    'sub-del': function (el) {
+      var cid = attr(el, 'id'); var r = F.removeSub(cid, attr(el, 's')); if (r.error) return toast(r.error, null, null, 5000);
+      openSubs(cid, attr(el, 'from'), true); render(); if (r.affected) toast('Вид видалено. ' + r.affected + ' ' + plural(r.affected, 'запис', 'записи', 'записів') + ' тепер без виду', null, null, 6000);
     },
     quick: function (el) {
       var q = quickList[Number(attr(el, 'i'))]; if (!q) return;
-      $('#tx-amount').value = String(q.amount).replace('.', ','); $('#tx-note').value = q.note; var r = $('#cat-' + q.category); if (r) r.checked = true; syncShops();
+      $('#tx-amount').value = String(q.amount).replace('.', ','); $('#tx-note').value = q.note; var r = $('#cat-' + q.category); if (r) r.checked = true; syncSub(); setSub(q.sub || ''); syncShops();
     },
     'repeat-tx': function (el) { var r = F.repeatTx(attr(el, 'id')); if (r.error) return toast(r.error); closeSheet(); render(); refreshList(); toast('Додано на сьогодні', 'Скасувати', function () { F.setDeleted(r.tx.id, true); render(); refreshList(); }); },
     'list-kind': function (el) { shopSel = null; listKind = attr(el, 'k'); catFilter = 'all'; if (view !== 'list') { view = 'list'; window.scrollTo(0, 0); } render(); },
@@ -909,7 +973,7 @@
     clubs: function () { openTags('clubs'); },
     shop: function (el) {
       var n = $('#tx-note'); var name = attr(el, 's'); var k = attr(el, 'k') || 'shops'; var on = F.tagOf({ note: n.value }, k) === name;
-      n.value = F.withTag(n.value, on ? '' : name); if (!on && k === 'clubs') { var kids = $('#cat-kids'); if (kids) kids.checked = true; } syncShops();
+      n.value = F.withTag(n.value, on ? '' : name); if (!on && k === 'clubs') { var kids = $('#cat-kids'); if (kids) kids.checked = true; syncSub(); } syncShops();
     },
     'shop-del': function (el) { var k = attr(el, 'k') || 'shops'; F.removeTag(k, attr(el, 's')); openTags(k, true); render(); },
     'shop-find': function (el) { shopKind = attr(el, 'k') || 'shops'; shopSel = attr(el, 's'); listKind = 'expense'; query = ''; catFilter = 'all'; view = 'list'; render(); window.scrollTo(0, 0); },
@@ -997,6 +1061,9 @@
     else if (kind === 'onboard') {
       var n = $('#o-name').value.trim(); if (!n) return showErr('o-err', 'Введіть ім’я.');
       F.setName(n); F.finishOnboarding(); closeSheet(); render();
+    } else if (kind === 'sub-add') {
+      var cid = attr(form, 'id'); var rs = F.addSub(cid, $('#sub-new').value); if (rs.error) return toast(rs.error, null, null, 5000);
+      openSubs(cid, attr(form, 'from'), true); render(); var ni = $('#sub-new'); if (ni) ni.focus();
     } else if (kind === 'cat-add') {
       var r = F.addCategory($('#cat-new').value); if (r.error) return toast(r.error, null, null, 6000); openBudget(true); render();
     } else if (kind === 'rec') {
@@ -1041,6 +1108,7 @@
   document.addEventListener('change', function (e) {
     var el = e.target;
     if (el.closest && el.closest('form[data-form=split]')) { updateSplit(); return; }
+    if (el.name === 'cat' && el.closest && el.closest('form[data-form=tx]')) { syncSub(); return; }
     if (el.id === 'tx-file') { if (el.files && el.files[0]) doScan(el.files[0]); return; }
     if (el.id === 'import-file') {
       var f = el.files && el.files[0]; if (!f) return;
@@ -1053,6 +1121,7 @@
     if (kind === 'name') { F.setName(el.value); return; }
     if (kind === 'currency') { F.setCurrency(el.value); render(); return; }
     if (kind === 'budget') { r = F.setBudget(el.value.trim() === '' ? null : el.value); if (r.error) { toast(r.error); el.value = F.state.cfg.budget ? String(F.state.cfg.budget).replace('.', ',') : ''; } render(); return; }
+    if (kind === 'sub-name') { var sid = attr(el, 's'); r = F.renameSub(id, sid, el.value); if (r.error) { toast(r.error, null, null, 5000); var cur0 = F.subsOf(id).filter(function (x) { return x.id === sid; })[0]; el.value = cur0 ? cur0.name : ''; } render(); return; }
     if (kind === 'cat-name') { r = F.updateCategory(id, { name: el.value }); if (r.error) { toast(r.error, null, null, 5000); el.value = F.catById(id).name; } render(); return; }
     if (kind === 'month-budget') { r = F.setMonthBudget(curYm, el.value.trim() === '' ? null : el.value); if (r.error) { toast(r.error); el.value = F.state.cfg.budgets[curYm] ? String(F.state.cfg.budgets[curYm]).replace('.', ',') : ''; } render(); return; }
     if (kind === 'member-limit') { var nm = el.getAttribute('data-name'); r = F.setMemberLimit(nm, el.value.trim() === '' ? null : el.value); if (r.error) { toast(r.error); el.value = F.state.cfg.memberLimits[nm] ? String(F.state.cfg.memberLimits[nm]).replace('.', ',') : ''; } render(); return; }

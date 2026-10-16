@@ -22,6 +22,33 @@
     { id: 'fun', name: 'Розваги й подарунки', colorIdx: 6, limit: null }
   ];
   var OTHER = { id: 'other', name: 'Інше', colorIdx: -1, limit: null };
+  // «Види» всередині категорії (наприклад, у «Продуктах»: молочне, овочі…). Це стартові набори: їх можна змінювати,
+  // додавати свої й видаляти. Ідентифікатор виду (id) не змінюється при перейменуванні, тож старі записи не губляться.
+  var MAX_SUBS = 20;
+  var DEFAULT_SUBS = {
+    food: [['meat', 'М\u2019ясо й риба'], ['dairy', 'Молочне й яйця'], ['veg', 'Овочі й фрукти'], ['bread', 'Хліб і випічка'], ['dry', 'Крупи й консерви'], ['drinks', 'Напої'], ['sweets', 'Солодощі й снеки']],
+    cafe: [['coffee', 'Кава й десерти'], ['lunch', 'Обіди'], ['delivery', 'Доставка їжі'], ['rest', 'Ресторани']],
+    transport: [['fuel', 'Пальне'], ['public', 'Громадський транспорт'], ['taxi', 'Таксі'], ['service', 'Ремонт і ТО'], ['park', 'Парковка й мийка']],
+    home: [['elec', 'Світло'], ['gas', 'Газ'], ['water', 'Вода'], ['heat', 'Опалення'], ['net', 'Інтернет і ТБ'], ['phone', 'Мобільний зв\u2019язок']],
+    household: [['chem', 'Побутова хімія'], ['hyg', 'Гігієна'], ['repair', 'Ремонт та інструменти'], ['tech', 'Техніка'], ['decor', 'Меблі й декор']],
+    health: [['pharm', 'Ліки'], ['doctor', 'Лікарі й аналізи'], ['dent', 'Стоматолог'], ['vit', 'Вітаміни']],
+    kids: [['school', 'Школа й садок'], ['clubs', 'Гуртки й секції'], ['toys', 'Іграшки'], ['clothes', 'Одяг і взуття']],
+    fun: [['gifts', 'Подарунки'], ['cinema', 'Кіно й розваги'], ['hobby', 'Хобі'], ['trip', 'Відпочинок і подорожі'], ['subs', 'Підписки']]
+  };
+  function defaultSubs(catId) { return (DEFAULT_SUBS[catId] || []).map(function (x) { return { id: x[0], name: x[1] }; }); }
+  function cloneCats() { return DEFAULT_CATS.map(function (c) { return Object.assign({}, c, { subs: defaultSubs(c.id) }); }); }
+  function cleanSubName(n) { return String(n == null ? '' : n).replace(/\|/g, '/').replace(/\s+/g, ' ').trim().slice(0, 30); }
+  // Перевіряє список видів із синхронізації: унікальні id й назви, безпечні символи, не більше MAX_SUBS
+  function cleanSubs(list) {
+    var out = [], ids = {}, names = {};
+    (Array.isArray(list) ? list : []).forEach(function (x) {
+      if (!x || out.length >= MAX_SUBS) return;
+      var name = cleanSubName(x.name); if (!name || names[name.toLowerCase()]) return;
+      var id = /^[a-z0-9_]{1,12}$/.test(String(x.id)) ? String(x.id) : ''; if (!id || ids[id]) id = 's_' + rid(6);
+      ids[id] = 1; names[name.toLowerCase()] = 1; out.push({ id: id, name: name });
+    });
+    return out;
+  }
   // Доходи й накопичення зберігаються як звичайні записи з особливим id категорії,
   // тому сервер і таблиця лишаються без змін.
   var INCOME_CATS = [{ id: 'in_advance', name: 'Аванс' }, { id: 'in_salary', name: 'Зарплата' }, { id: 'in_bonus', name: 'Премія й бонуси' }, { id: 'in_extra', name: 'Додатковий дохід' }, { id: 'in_other', name: 'Інші надходження' }];
@@ -52,13 +79,14 @@
   function b64dec(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
 
   // ---------- Стан ----------
-  var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'];
+  var NEW_SHOPS = ['Сільпо', 'АТБ', 'Маудау', 'Інтернет магазини'];
+  var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'].concat(NEW_SHOPS);
   function cleanShops(a) {
     var seen = {}, out = [];
     (Array.isArray(a) ? a : []).forEach(function (x) { var n = String(x == null ? '' : x).trim().replace(/\s+/g, ' ').slice(0, 30); var k = n.toLowerCase(); if (n && !seen[k] && out.length < 30) { seen[k] = 1; out.push(n); } });
     return out;
   }
-  function defaultCfg() { return { categories: DEFAULT_CATS.map(function (c) { return Object.assign({}, c); }), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], updatedAt: 0 }; }
+  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], updatedAt: 0 }; }
   function freshState() {
     return {
       v: 1, txs: {}, cfg: defaultCfg(), cfgDirty: false,
@@ -76,7 +104,8 @@
     if (!c || typeof c !== 'object') return d;
     var cats = Array.isArray(c.categories) ? c.categories.filter(function (x) { return x && typeof x.id === 'string' && x.id && x.id !== 'other'; }).slice(0, MAX_COLORED).map(function (x) {
       var lim = x.limit == null ? null : parseAmount(x.limit);
-      return { id: String(x.id).slice(0, 40), name: String(x.name || 'Без назви').slice(0, 30), colorIdx: Number(x.colorIdx) >= 0 && Number(x.colorIdx) < MAX_COLORED ? Number(x.colorIdx) : 0, limit: lim };
+      return { id: String(x.id).slice(0, 40), name: String(x.name || 'Без назви').replace(/\|/g, '/').slice(0, 30), colorIdx: Number(x.colorIdx) >= 0 && Number(x.colorIdx) < MAX_COLORED ? Number(x.colorIdx) : 0, limit: lim,
+        subs: Array.isArray(x.subs) ? cleanSubs(x.subs) : defaultSubs(String(x.id)) };
     }) : d.categories;
     return {
       categories: cats,
@@ -127,23 +156,77 @@
     S = freshState();
   }
   function upgradeDefaults() {
+    // Один раз додаємо нові стандартні магазини до вже збереженого списку (порожній список і видалені пізніше не чіпаємо)
+    if (!S.meta.mShops2) {
+      S.meta.mShops2 = 1;
+      var have = {}; S.cfg.shops.forEach(function (n) { have[n.toLowerCase()] = 1; });
+      var add = NEW_SHOPS.filter(function (n) { return !have[n.toLowerCase()]; });
+      if (add.length && S.cfg.shops.length) {
+        S.cfg.shops = cleanShops(S.cfg.shops.concat(add));
+        // Нічого не налаштовували? Тоді не позначаємо налаштування зміненими, щоб не затерти спільні при підключенні
+        if (S.cfg.updatedAt === 0 && !S.cfgDirty) save(); else touchCfg();
+      } else save();
+    }
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
-    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = DEFAULT_CATS.map(function (c) { return Object.assign({}, c); }); S.meta.mHousehold = 1; return; }
+    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; return; }
     // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
     if (!S.meta.mHousehold) {
       S.meta.mHousehold = 1; var cats = S.cfg.categories;
       if (cats.length < MAX_COLORED && !cats.some(function (c) { return c.id === 'household' || /побут/i.test(c.name); })) {
         var used = {}; cats.forEach(function (c) { used[c.colorIdx] = 1; }); var ci = 9; for (var k = 0; k < MAX_COLORED; k++) if (!used[k]) { ci = k; break; }
-        cats.push({ id: 'household', name: 'Побут і господарство', colorIdx: ci, limit: null }); touchCfg();
+        cats.push({ id: 'household', name: 'Побут і господарство', colorIdx: ci, limit: null, subs: defaultSubs('household') }); touchCfg();
       } else save();
     }
   }
 
   // ---------- Категорії ----------
   function categories() { return S.cfg.categories.concat([OTHER]); }
+  // Вид зберігається в кінці службового поля cn («Продукти|dairy»): категорія лишається та сама,
+  // тож звіти, ліміти, фільтри й старі версії додатка працюють без змін.
+  var FOOD_ID = 'food';
+  var SUB_TAIL = /\|([a-z0-9_]{1,12})$/;
+  function subIdOfCn(cn) { var m = SUB_TAIL.exec(String(cn || '')); return m ? m[1] : ''; }
+  function stripSub(cn) { return String(cn || '').replace(SUB_TAIL, ''); }
+  function catSubs(catId) { var c = S.cfg.categories.filter(function (x) { return x.id === catId; })[0]; return c && c.subs ? c.subs : []; }
+  function subsOf(catId) { return catSubs(catId).map(function (x) { return { id: x.id, name: x.name }; }); }
+  function validSub(catId, sub) { return sub && catSubs(catId).some(function (x) { return x.id === sub; }) ? String(sub) : ''; }
+  function subOf(t) {
+    if (!t) return null; var id = subIdOfCn(t.cn); if (!id) return null;
+    return catSubs(t.category).filter(function (x) { return x.id === id; })[0] || null;
+  }
+  function subUsage(catId, subId) {
+    var n = 0; Object.keys(S.txs).forEach(function (k) { var t = S.txs[k]; if (!t.deleted && t.category === catId && subIdOfCn(t.cn) === subId) n++; });
+    return n;
+  }
+  function findCat(catId) { return S.cfg.categories.filter(function (x) { return x.id === catId; })[0]; }
+  function addSub(catId, name) {
+    var c = findCat(catId); if (!c) return { error: 'Категорію не знайдено.' };
+    name = cleanSubName(name); if (!name) return { error: 'Введіть назву виду.' };
+    c.subs = c.subs || [];
+    if (c.subs.length >= MAX_SUBS) return { error: 'Можна мати до ' + MAX_SUBS + ' видів у категорії. Видаліть непотрібний.' };
+    if (c.subs.some(function (x) { return x.name.toLowerCase() === name.toLowerCase(); })) return { error: 'Вид із такою назвою вже є.' };
+    var id; do { id = 's_' + rid(6); } while (c.subs.some(function (x) { return x.id === id; }));
+    var sub = { id: id, name: name }; c.subs.push(sub); touchCfg();
+    return { sub: sub };
+  }
+  function renameSub(catId, subId, name) {
+    var c = findCat(catId); var sub = c && (c.subs || []).filter(function (x) { return x.id === subId; })[0];
+    if (!sub) return { error: 'Вид не знайдено.' };
+    name = cleanSubName(name); if (!name) return { error: 'Назва не може бути порожньою.' };
+    if (c.subs.some(function (x) { return x.id !== subId && x.name.toLowerCase() === name.toLowerCase(); })) return { error: 'Вид із такою назвою вже є.' };
+    sub.name = name; touchCfg();
+    return { sub: sub };
+  }
+  // Записи видаленого виду лишаються в категорії й показуються як «без уточнення виду»
+  function removeSub(catId, subId) {
+    var c = findCat(catId); if (!c || !(c.subs || []).some(function (x) { return x.id === subId; })) return { error: 'Вид не знайдено.' };
+    var n = subUsage(catId, subId);
+    c.subs = c.subs.filter(function (x) { return x.id !== subId; }); touchCfg();
+    return { ok: true, affected: n };
+  }
   function catById(id, fallbackName) {
     var c = categories().filter(function (x) { return x.id === id; })[0];
-    return c || { id: 'other', name: fallbackName || 'Інше', colorIdx: -1, limit: null };
+    return c || { id: 'other', name: stripSub(fallbackName) || 'Інше', colorIdx: -1, limit: null };
   }
   function touchCfg() { S.cfg.updatedAt = stamp(S.cfg.updatedAt); S.cfgDirty = true; save(); scheduleSync(); }
   function catUsage(id) {
@@ -153,13 +236,13 @@
     return { txs: n, recurring: r };
   }
   function addCategory(name) {
-    name = String(name || '').trim().slice(0, 30);
+    name = String(name || '').replace(/\|/g, '/').trim().slice(0, 30);
     if (!name) return { error: 'Введіть назву категорії.' };
     if (S.cfg.categories.length >= MAX_COLORED) return { error: 'Можна мати до ' + MAX_COLORED + ' власних категорій (ще є «Інше»). Видаліть непотрібну.' };
     if (categories().some(function (c) { return c.name.toLowerCase() === name.toLowerCase(); })) return { error: 'Категорія з такою назвою вже є.' };
     var used = S.cfg.categories.map(function (c) { return c.colorIdx; });
     var colorIdx = 0; while (used.indexOf(colorIdx) >= 0) colorIdx++;
-    var cat = { id: 'c_' + rid(6), name: name, colorIdx: colorIdx, limit: null };
+    var cat = { id: 'c_' + rid(6), name: name, colorIdx: colorIdx, limit: null, subs: [] };
     S.cfg.categories.push(cat); touchCfg();
     return { cat: cat };
   }
@@ -167,7 +250,7 @@
     var c = S.cfg.categories.filter(function (x) { return x.id === id; })[0];
     if (!c) return { error: 'Категорію не знайдено.' };
     if (patch.name != null) {
-      var name = String(patch.name).trim().slice(0, 30);
+      var name = String(patch.name).replace(/\|/g, '/').trim().slice(0, 30);
       if (!name) return { error: 'Назва не може бути порожньою.' };
       if (categories().some(function (x) { return x.id !== id && x.name.toLowerCase() === name.toLowerCase(); })) return { error: 'Категорія з такою назвою вже є.' };
       c.name = name;
@@ -212,7 +295,8 @@
     var date = p.date || todayStr();
     if (!isDateStr(date)) return { error: 'Вкажіть дату.' };
     var id = 't_' + FB.now().toString(36) + rid(4);
-    var t = { id: id, date: date, amount: amount, category: cat.id, cn: cat.name, note: String(p.note || '').trim().slice(0, 200), member: memberName(), updatedAt: stamp(0), deleted: 0, dirty: true };
+    var sub = validSub(cat.id, p.sub);
+    var t = { id: id, date: date, amount: amount, category: cat.id, cn: cat.name + (sub ? '|' + sub : ''), note: String(p.note || '').trim().slice(0, 200), member: memberName(), updatedAt: stamp(0), deleted: 0, dirty: true };
     S.txs[id] = t; if (cat.kind === 'expense') S.meta.lastCat = cat.id; save(); scheduleSync();
     return { tx: t };
   }
@@ -223,7 +307,9 @@
     var amount = parseAmount(p.amount, cat.kind === 'saving'); if (amount == null) return { error: cat.kind === 'saving' ? 'Введіть суму (мінус означає зняття).' : 'Введіть суму більше нуля.' };
     if (!isDateStr(p.date)) return { error: 'Вкажіть дату.' };
     // категорію, якої вже немає, не перейменовуємо мовчки
-    t.amount = amount; t.date = p.date; t.category = cat.id; t.cn = (cat.id === 'other' && p.category !== 'other') || cat.missing ? t.cn : cat.name;
+    var keepName = (cat.id === 'other' && p.category !== 'other') || cat.missing;
+    var sub = validSub(cat.id, p.sub !== undefined ? p.sub : (t.category === cat.id ? subIdOfCn(t.cn) : ''));
+    t.amount = amount; t.date = p.date; t.category = cat.id; t.cn = (keepName ? stripSub(t.cn) : cat.name) + (sub ? '|' + sub : '');
     t.note = String(p.note || '').trim().slice(0, 200);
     t.updatedAt = stamp(t.updatedAt); t.dirty = true; t.deleted = 0;
     if (cat.kind === 'expense') S.meta.lastCat = cat.id; save(); scheduleSync();
@@ -232,7 +318,7 @@
   // Копія запису на сьогодні («повторити»)
   function repeatTx(id) {
     var t = S.txs[id]; if (!t) return { error: 'Запис не знайдено.' };
-    return addTx({ amount: t.amount, category: t.category, date: todayStr(), note: t.note });
+    return addTx({ amount: t.amount, category: t.category, sub: subIdOfCn(t.cn), date: todayStr(), note: t.note });
   }
   // Змінити категорію одразу в багатьох витратах
   function bulkSetCategory(ids, catId) {
@@ -280,6 +366,17 @@
       if (t.amount > g[key].top) { g[key].top = t.amount; g[key].name = raw; } // підпис беремо з найбільшої покупки
     });
     return order.map(function (k) { return g[k]; }).sort(function (a, b) { return b.total - a.total; });
+  }
+  // «<Категорія> за видами»: витрати однієї категорії за місяць; те, що без виду, окремо
+  function subTotals(ym, catId) {
+    var m = {}, none = { total: 0, count: 0 };
+    monthTxs(ym).forEach(function (t) {
+      if (catById(t.category, t.cn).id !== catId) return;
+      var sb = subOf(t); var o = sb ? (m[sb.id] = m[sb.id] || { id: sb.id, name: sb.name, total: 0, count: 0 }) : none;
+      o.total = round2(o.total + t.amount); o.count++;
+    });
+    var items = catSubs(catId).filter(function (x) { return m[x.id]; }).map(function (x) { return m[x.id]; }).sort(function (a, b) { return b.total - a.total; });
+    return { items: items, none: none, total: round2(none.total + items.reduce(function (t, x) { return t + x.total; }, 0)) };
   }
   function byMember(ym) {
     var m = {}; monthTxs(ym).forEach(function (t) { var k = t.member || 'Без імені'; m[k] = round2((m[k] || 0) + t.amount); });
@@ -445,8 +542,8 @@
     var from = F_daysAgo(120); var m = {};
     liveTxs().forEach(function (t) {
       if (t.date < from || t.id.indexOf('rec_') === 0) return;
-      var key = (t.note || '').trim().toLowerCase() + '|' + t.category + '|' + t.amount;
-      if (!m[key]) m[key] = { note: (t.note || '').trim(), category: t.category, amount: t.amount, count: 0, last: '' };
+      var sb = subIdOfCn(t.cn); var key = (t.note || '').trim().toLowerCase() + '|' + t.category + '|' + sb + '|' + t.amount;
+      if (!m[key]) m[key] = { note: (t.note || '').trim(), category: t.category, sub: sb, amount: t.amount, count: 0, last: '' };
       m[key].count++; if (t.date > m[key].last) m[key].last = t.date;
     });
     return Object.keys(m).map(function (k) { return m[k]; }).filter(function (x) { return x.count >= 2; })
@@ -709,10 +806,10 @@
   }
   function exportCSV() {
     function q(v) { v = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(v)) v = '’' + v; return '"' + v.replace(/"/g, '""') + '"'; }
-    var rows = [['Дата', 'Сума', 'Категорія', 'Нотатка', 'Хто', 'Тип']];
+    var rows = [['Дата', 'Сума', 'Категорія', 'Нотатка', 'Хто', 'Тип', 'Вид']];
     var KIND = { expense: 'Витрата', income: 'Дохід', saving: 'Накопичення' };
     allLive().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.updatedAt - b.updatedAt; }).forEach(function (t) {
-      rows.push([t.date, String(t.amount).replace('.', ','), catInfo(t).name, t.note, t.member, KIND[kindOf(t)]]);
+      rows.push([t.date, String(t.amount).replace('.', ','), catInfo(t).name, t.note, t.member, KIND[kindOf(t)], (subOf(t) || { name: '' }).name]);
     });
     return '﻿' + rows.map(function (r) { return r.map(q).join(';'); }).join('\r\n');
   }
@@ -794,19 +891,23 @@
     return 'Не вдалося розпізнати чек. Введіть суму вручну.';
   }
   function receiptPayload(base64, mime) {
-    var cats = categories();
+    var cats = categories(); var withSubs = S.cfg.categories.filter(function (c) { return c.subs && c.subs.length; });
     var prompt = 'Це фото касового чека або скриншот замовлення з інтернет-магазину (підтвердження замовлення, кошик, лист). Знайди назву магазину або сайту, дату покупки, ПІДСУМКОВУ суму до сплати та валюту. ' +
       'Для замовлення з інтернет-магазину дата — це дата замовлення, а не доставки; підсумок — сума до сплати разом із доставкою; доставку, якщо вона вказана окремо, додай окремою позицією «Доставка» з категорією основних товарів. ' +
       'Дату поверни як РРРР-ММ-ДД; якщо її не видно, залиш порожній рядок. Суму поверни числом без пробілів; якщо чека не видно, поверни 0. ' +
       'Категорію обери одну з переліку за змістом покупки: ' + cats.map(function (c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '. ' +
       'Якщо сумніваєшся, вибирай other. ' +
       'Також випиши ОКРЕМІ ПОЗИЦІЇ чека (не більше 40; схожі дрібні товари об\u2019єднуй): назва, ціна позиції в чеку з урахуванням знижки та категорія з того ж переліку для кожної позиції окремо. ' +
-      'Сума цін усіх позицій має дорівнювати підсумковій сумі. Не додавай до позицій рядки підсумку, решти, картки лояльності чи податку.';
+      'Сума цін усіх позицій має дорівнювати підсумковій сумі. Не додавай до позицій рядки підсумку, решти, картки лояльності чи податку.' +
+      (withSubs.length ? ' Для позицій цих категорій додатково вкажи поле sub, тобто вид: ' + withSubs.map(function (c) { return c.id + ': ' + c.subs.map(function (x) { return x.id + ' (' + x.name + ')'; }).join(', '); }).join('; ') + '. Використовуй лише вид зі списку тієї самої категорії. Для доставки, пакетів і всього, що не підходить, поле sub не додавай. Для позицій інших категорій sub теж не додавай.' : '');
+    var subIds = []; withSubs.forEach(function (c) { c.subs.forEach(function (x) { if (subIds.indexOf(x.id) < 0) subIds.push(x.id); }); });
+    var itemProps = { name: { type: 'STRING' }, amount: { type: 'NUMBER' }, category: { type: 'STRING', enum: cats.map(function (c) { return c.id; }) } };
+    if (subIds.length) itemProps.sub = { type: 'STRING', enum: subIds };
     return {
       contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mime || 'image/jpeg', data: base64 } }] }],
       generationConfig: {
         responseMimeType: 'application/json',
-        responseSchema: { type: 'OBJECT', properties: { merchant: { type: 'STRING' }, date: { type: 'STRING' }, total: { type: 'NUMBER' }, currency: { type: 'STRING' }, category: { type: 'STRING', enum: cats.map(function (c) { return c.id; }) }, items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { name: { type: 'STRING' }, amount: { type: 'NUMBER' }, category: { type: 'STRING', enum: cats.map(function (c) { return c.id; }) } }, required: ['name', 'amount', 'category'] } } }, required: ['merchant', 'date', 'total', 'currency', 'category'] }
+        responseSchema: { type: 'OBJECT', properties: { merchant: { type: 'STRING' }, date: { type: 'STRING' }, total: { type: 'NUMBER' }, currency: { type: 'STRING' }, category: { type: 'STRING', enum: cats.map(function (c) { return c.id; }) }, items: { type: 'ARRAY', items: { type: 'OBJECT', properties: itemProps, required: ['name', 'amount', 'category'] } } }, required: ['merchant', 'date', 'total', 'currency', 'category'] }
       }
     };
   }
@@ -819,20 +920,21 @@
     var ids = categories().map(function (c) { return c.id; });
     var items = (Array.isArray(o.items) ? o.items : []).slice(0, 60).map(function (it) {
       var a = it && parseAmount(it.amount); if (a == null) return null;
-      return { name: String(it.name || '').trim().slice(0, 60), amount: a, category: ids.indexOf(it && it.category) >= 0 ? it.category : 'other' };
+      var ic2 = ids.indexOf(it && it.category) >= 0 ? it.category : 'other';
+      return { name: String(it.name || '').trim().slice(0, 60), amount: a, category: ic2, sub: validSub(ic2, it && it.sub) };
     }).filter(Boolean);
     var itemsSum = round2(items.reduce(function (t, x) { return t + x.amount; }, 0));
     return { merchant: String(o.merchant || '').trim().slice(0, 80), date: date, total: total, currency: String(o.currency || '').trim().slice(0, 8), category: cat ? cat.id : 'other', items: items, itemsSum: itemsSum };
   }
   // Чек, розкладений по категоріях: одна витрата на категорію. rows: [{category, amount}]
   function addSplit(p) {
-    var rows = (p && Array.isArray(p.rows) ? p.rows : []).map(function (x) { return { category: x.category, amount: parseAmount(x.amount) }; });
+    var rows = (p && Array.isArray(p.rows) ? p.rows : []).map(function (x) { return { category: x.category, sub: x.sub, amount: parseAmount(x.amount) }; });
     if (!rows.length) return { error: 'Немає що записувати.' };
     if (rows.some(function (x) { return x.amount == null; })) return { error: 'Перевірте суми: кожна має бути більшою за нуль.' };
-    var order = [], sums = {};
-    rows.forEach(function (x) { var id = catById(x.category).id; if (!(id in sums)) { sums[id] = 0; order.push(id); } sums[id] = round2(sums[id] + x.amount); });
+    var order = [], sums = {}, parts = {};
+    rows.forEach(function (x) { var id = catById(x.category).id; var sb = validSub(id, x.sub); var k = id + '|' + sb; if (!(k in sums)) { sums[k] = 0; order.push(k); parts[k] = { id: id, sub: sb }; } sums[k] = round2(sums[k] + x.amount); });
     var date = p.date || todayStr(); if (!isDateStr(date)) return { error: 'Вкажіть дату.' };
-    return { txs: order.map(function (id) { return addTx({ amount: sums[id], category: id, date: date, note: p.note }).tx; }) };
+    return { txs: order.map(function (k) { return addTx({ amount: sums[k], category: parts[k].id, sub: parts[k].sub, date: date, note: p.note }).tx; }) };
   }
   function fileToJpegBase64(file, maxSide) {
     maxSide = maxSide || 1400;
@@ -864,6 +966,11 @@
       var sp = spentByCategory(m);
       var r = { month: m, income: f.income, spent: f.spent, saved: f.saved };
       var b = monthBudget(m).total; if (b) r.budget = b;
+      var ty = []; Object.keys(sp).forEach(function (id) {
+        if (!catSubs(id).length) return; var st = subTotals(m, id); if (!st.items.length) return;
+        ty.push({ category: catById(id).name, types: st.items.slice(0, 8).map(function (x) { return { name: x.name, sum: x.total }; }).concat(st.none.total ? [{ name: 'Без уточнення виду', sum: st.none.total }] : []) });
+      });
+      if (ty.length) r.categoryTypes = ty;
       var inc = incomeBySource(m); if (inc.length) r.incomeBySource = inc.map(function (x) { return { name: x.name, sum: x.total }; });
       r.categories = Object.keys(sp).sort(function (a, b2) { return sp[b2] - sp[a]; }).map(function (id) { return { name: catById(id).name, sum: sp[id] }; });
       TAG_KINDS.forEach(function (k) {
@@ -952,7 +1059,7 @@
     // категорії та бюджет
     categories: categories, catById: catById, catUsage: catUsage, addCategory: addCategory, updateCategory: updateCategory, removeCategory: removeCategory, setBudget: setBudget, setCurrency: setCurrency,
     // витрати
-    addTx: addTx, updateTx: updateTx, setDeleted: setDeleted, restoreSnapshot: restoreSnapshot, monthTxs: monthTxs, monthKind: monthKind, monthFlow: monthFlow, incomeBySource: incomeBySource, allLive: allLive, kindOf: kindOf, catInfo: catInfo, resolveCat: resolveCat, INCOME_CATS: INCOME_CATS, catMonthTxs: catMonthTxs, catSeries: catSeries, groupByNote: groupByNote, spentByCategory: spentByCategory, byMember: byMember, dailySeries: dailySeries, monthsSeries: monthsSeries, members: members, sum: sum,
+    addTx: addTx, updateTx: updateTx, setDeleted: setDeleted, restoreSnapshot: restoreSnapshot, monthTxs: monthTxs, monthKind: monthKind, monthFlow: monthFlow, incomeBySource: incomeBySource, normalizeCfg: normalizeCfg, cfgPayload: cfgPayload, subTotals: subTotals, subOf: subOf, subsOf: subsOf, addSub: addSub, renameSub: renameSub, removeSub: removeSub, subUsage: subUsage, MAX_SUBS: MAX_SUBS, FOOD_ID: FOOD_ID, allLive: allLive, kindOf: kindOf, catInfo: catInfo, resolveCat: resolveCat, INCOME_CATS: INCOME_CATS, catMonthTxs: catMonthTxs, catSeries: catSeries, groupByNote: groupByNote, spentByCategory: spentByCategory, byMember: byMember, dailySeries: dailySeries, monthsSeries: monthsSeries, members: members, sum: sum,
     monthBudget: monthBudget, overview: overview, setMonthBudget: setMonthBudget, setMemberLimit: setMemberLimit, monthSummary: monthSummary,
     // цілі, кредити, швидке додавання
     goalInfo: goalInfo, addGoal: addGoal, updateGoal: updateGoal, removeGoal: removeGoal, addContribution: addContribution, goalById: goalById,
@@ -967,7 +1074,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v11', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v14', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

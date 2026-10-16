@@ -270,3 +270,19 @@ section + .btn { margin-top: 26px; }
 .split-row .in { min-height: 44px; padding: 0 10px; }
 .split-row .ibtn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: var(--ink2); }
 .split-sum { margin-top: 10px; padding-top: 4px; border-top: 2px solid var(--line); }
+
+.ai-out { margin-top: 14px; padding: 14px 16px; background: var(--wash); border-radius: 14px; line-height: 1.5; }
+.ai-out p { margin: 0 0 10px; }
+.ai-out p:last-child { margin-bottom: 0; }
+.ai-out ul { margin: 0 0 10px; padding-left: 20px; }
+.ai-out li { margin-bottom: 6px; }
+.ai-out.bad { color: var(--warn); }
+.ai-out .ai-note { color: var(--ink2); font-size: 0.85em; }
+.ai-chips { flex-wrap: wrap; overflow: visible; padding: 0; margin: 12px 0 0; }
+.ai-chips .chip { background: var(--wash); }
+.ai-chips .chip:disabled { opacity: 0.5; }
+
+.lrow.sub .name { color: var(--ink2); font-size: 14px; padding-left: 14px; }
+.lrow.sub .val { color: var(--ink2); font-size: 14px; }
+.ledger > li.subli { padding: 3px 0; border-top: 0; }
+.ledger > li.subli:last-of-type { padding-bottom: 10px; }

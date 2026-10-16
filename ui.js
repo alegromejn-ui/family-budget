@@ -122,9 +122,11 @@
   // ---------- Нові блоки головного екрана ----------
   function flowSection() {
     var f = F.monthFlow(curYm); if (!(f.income > 0 || f.saved !== 0)) return '';
+    var src = F.incomeBySource(curYm);
+    var incomeParts = src.length > 1 ? src.map(function (x) { return '<li class="subli"><span class="lrow sub"><span class="name">' + esc(x.name) + (x.count > 1 ? ' · ' + x.count + ' надходж.' : '') + '</span><span class="lead"></span><span class="val num">' + signedMoney(x.total) + '</span></span></li>'; }).join('') : '';
     var row = function (name, val, cls) { return '<li><span class="lrow"><span class="name"><b>' + name + '</b></span><span class="lead"></span><span class="val num' + (cls || '') + '">' + val + '</span></span></li>'; };
     return '<section class="sec"><div class="sec-h"><h2>Баланс місяця</h2><button class="btn-text" data-act="list-kind" data-k="income">Доходи</button></div><div class="panel"><ul class="ledger">' +
-      row('Доходи', signedMoney(f.income)) + row('Витрати', money(f.spent)) + (f.saved !== 0 ? row('Відкладено', money(f.saved)) : '') +
+      row('Доходи', signedMoney(f.income)) + incomeParts + row('Витрати', money(f.spent)) + (f.saved !== 0 ? row('Відкладено', money(f.saved)) : '') +
       '<li><span class="lrow"><span class="name"><b>Залишок</b></span><span class="lead"></span><span class="val num' + (f.balance < 0 ? ' badtxt' : '') + '">' + money(f.balance) + '</span></span>' + (f.balance < 0 ? '<span class="status bad">' + ic('alert', 'sm') + 'Витрати та накопичення перевищили доходи</span>' : '') + '</li></ul></div></section>';
   }
   function limitsSection() {
@@ -307,6 +309,7 @@
     var diff = prev > 0 ? total - prev : null;
     var read = '<b>' + esc(cap(monthName(ym))) + ':</b> ' + money(total) + (diff === null ? '' : diff === 0 ? ', стільки ж, як місяць тому' : ', на ' + money(Math.abs(diff)) + (diff > 0 ? ' більше' : ' менше') + ', ніж місяць тому');
     h += summaryHtml();
+    h += '<button type="button" class="btn alt" data-act="ai" style="margin-top:12px">' + ic('sparkle') + ' ШІ-аналіз місяця</button>';
     h += '<section class="sec"><div class="sec-h"><h2>Куди пішли гроші</h2></div><div class="panel">';
     if (repMode === 'table') {
       h += '<table class="t"><thead><tr><th>Категорія</th><th>Сума</th><th>Частка</th></tr></thead><tbody>' + cats.map(function (c) { return '<tr><td>' + esc(c.name) + '</td><td class="num">' + money(spent[c.id]) + '</td><td class="num">' + Math.round(spent[c.id] / total * 100) + '%</td></tr>'; }).join('') + '<tr><td><b>Разом</b></td><td class="num"><b>' + money(total) + '</b></td><td></td></tr></tbody></table>';
@@ -406,6 +409,7 @@
       '<li><button data-act="clubs"><span class="ico">' + ic('users') + '</span><span class="grow"><span class="t1">Гуртки дитини</span><span class="t2">' + (S.cfg.clubs.length ? S.cfg.clubs.length + ' ' + plural(S.cfg.clubs.length, 'гурток', 'гуртки', 'гуртків') + ' для швидкого вибору' : 'Футбол, англійська, танці…') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="goals"><span class="ico">' + ic('check') + '</span><span class="grow"><span class="t1">Цілі накопичень</span><span class="t2">' + (S.cfg.goals.length ? S.cfg.goals.length + ' ' + plural(S.cfg.goals.length, 'ціль', 'цілі', 'цілей') : 'Відпустка, резерв, велика покупка') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="loans"><span class="ico">' + ic('repeat') + '</span><span class="grow"><span class="t1">Кредити та картки</span><span class="t2">' + (S.cfg.loans.length ? 'Борг ' + money(F.loansSummary(F.todayStr()).total) : 'Залишок, дата закінчення, переплата') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
+      '<li><button data-act="ai"><span class="ico">' + ic('sparkle') + '</span><span class="grow"><span class="t1">ШІ-аналіз</span><span class="t2">Питання про ваші витрати</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="key"><span class="ico">' + ic('sparkle') + '</span><span class="grow"><span class="t1">Розпізнавання чеків</span><span class="t2">' + ({ own: 'Ключ Gemini додано', nutriplan: 'Використовується ключ з NutriPlan', none: 'Потрібен ключ Gemini' }[F.keySource()]) + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="pin"><span class="ico">' + ic('users') + '</span><span class="grow"><span class="t1">PIN-код</span><span class="t2">' + (F.hasPin() ? 'Увімкнено на цьому телефоні' : 'Закрити додаток від сторонніх') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '</ul><label class="field"><span>Валюта</span><select class="in" id="cur" data-change="currency">' + F.CURRENCIES.map(function (c) { return '<option value="' + esc(c) + '"' + (c === cur() ? ' selected' : '') + '>' + esc(c + ' ' + ({ '₴': 'гривня', '$': 'долар', '€': 'євро', 'zł': 'злотий', '£': 'фунт' }[c])) + '</option>'; }).join('') + '</select></label><div style="height:14px"></div></div></section>';
@@ -817,6 +821,55 @@
     openSheet(html, { focus: '#k-val' });
   }
 
+  // --- ШІ-аналіз ---
+  var aiBusy = false;
+  var AI_CHIPS = [
+    ['Куди йдуть гроші?', 'Куди найбільше йдуть гроші цього місяця і що з цього не обов’язкове?'],
+    ['Де заощадити?', 'Де в моїх витратах найреальніше заощадити і скільки приблизно це дасть на місяць?'],
+    ['Чи вкладемось у бюджет?', 'Чи вкладемось ми цього місяця в бюджет? Зроби прогноз до кінця місяця.'],
+    ['Порівняй з минулим місяцем', 'Порівняй цей місяць з попереднім: що зросло, що зменшилось і чому це важливо.'],
+    ['Магазини й гуртки', 'Розбери витрати за магазинами та гуртками, якщо вони є: де йде найбільше.']
+  ];
+  function aiHtml(text) {
+    var html = '', list = false;
+    String(text).replace(/\r/g, '').split('\n').forEach(function (raw) {
+      var line = raw.trim().replace(/^#+\s*/, ''); if (!line) { if (list) { html += '</ul>'; list = false; } return; }
+      var m = /^[-*•]\s+(.*)$/.exec(line);
+      var body = esc(m ? m[1] : line).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+      if (m) { if (!list) { html += '<ul>'; list = true; } html += '<li>' + body + '</li>'; }
+      else { if (list) { html += '</ul>'; list = false; } html += '<p>' + body + '</p>'; }
+    });
+    return html + (list ? '</ul>' : '');
+  }
+  function setAiBusy(on) { $$('[data-act=ai-ask], form[data-form=ai] button[type=submit]').forEach(function (b) { b.disabled = on; }); }
+  function runAI(q) {
+    var out = $('#ai-out'); if (!out || aiBusy) return;
+    aiBusy = true; setAiBusy(true); out.hidden = false; out.className = 'ai-out'; out.textContent = 'Аналізую… це може зайняти до пів хвилини.';
+    F.askAI(q, ym).then(function (text) {
+      if (!document.body.contains(out)) return;
+      out.innerHTML = aiHtml(text) + '<p class="ai-note">Це підказки на основі ваших записів, а не фінансова порада.</p>';
+    }, function (e) {
+      if (!document.body.contains(out)) return;
+      out.className = 'ai-out bad';
+      out.textContent = e && (e.code || e.status) ? F.describeGeminiError(e) : 'Не вдалося отримати аналіз. Спробуйте ще раз.';
+    }).then(function () { aiBusy = false; setAiBusy(false); });
+  }
+  function openAI() {
+    aiBusy = false;
+    var html = '<form data-form="ai" novalidate>' + sheetTop('ШІ-аналіз', cap(monthName(ym)) + ' ' + ym.slice(0, 4) + ' і попередні місяці для порівняння.');
+    if (F.keySource() === 'none') {
+      html += '<p class="note">Для аналізу потрібен ключ Gemini, такий самий, як для розпізнавання чеків.</p><button type="button" class="btn" data-act="key">Додати ключ</button></form>';
+    } else {
+      html += '<button type="button" class="btn" data-act="ai-ask" data-q="">' + ic('sparkle') + ' Зробити аналіз</button>' +
+        '<div class="chips ai-chips" role="group" aria-label="Готові питання">' + AI_CHIPS.map(function (c) { return '<button type="button" class="chip" data-act="ai-ask" data-q="' + esc(c[1]) + '">' + esc(c[0]) + '</button>'; }).join('') + '</div>' +
+        '<label class="field"><span>Своє питання</span><input class="in" id="ai-q" maxlength="300" autocomplete="off" placeholder="Наприклад: скільки на Кубиху?"></label>' +
+        '<button class="btn alt" type="submit">Запитати</button>' +
+        '<div class="ai-out" id="ai-out" role="status" aria-live="polite" hidden></div>' +
+        '<p class="note">Надсилаються підсумки по місяцях, категоріях, магазинах, гуртках і людях, цілі, кредити та 15 найбільших витрат з нотатками. Фото й повний список витрат не надсилаються. Безкоштовний ліміт Google дозволяє використовувати надіслане для покращення продуктів.</p></form>';
+    }
+    openSheet(html, {});
+  }
+
   // ---------- Файли ----------
   async function saveFile(name, text, mime) {
     var blob = new Blob([text], { type: mime });
@@ -897,6 +950,8 @@
     budget: function () { openBudget(); },
     recurring: function () { openRecurring(); },
     key: function () { openKey(); },
+    ai: function () { openAI(); },
+    'ai-ask': function (el) { runAI(attr(el, 'q') || ''); },
     'key-test': function (el) {
       var box = $('#k-test'); if (!box) return; box.hidden = false; box.textContent = 'Перевіряю…'; el.disabled = true;
       F.testKey().then(function (rows) {
@@ -935,6 +990,7 @@
 
   document.addEventListener('submit', function (e) {
     var form = e.target; var kind = form.getAttribute('data-form'); if (!kind) return; e.preventDefault();
+    if (kind === 'ai') { runAI(($('#ai-q') || {}).value || ''); return; }
     if (kind === 'tx') submitTx(form);
     else if (kind === 'connect') submitConnect();
     else if (kind === 'join') submitJoin(form);

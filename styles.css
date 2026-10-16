@@ -7,7 +7,7 @@
 :root {
   --paper: #EDF1EE; --sheet: #FFFFFF; --ink: #0F1D19; --ink2: #50605A; --line: #D3DBD7; --wash: #E3E9E5;
   --accent: #0F4D3F; --on-accent: #FFFFFF; --warn: #A8321F; --warn-wash: #FBE9E5; --bar: #9DB0A8;
-  --c0: #0072B2; --c1: #E69F00; --c2: #009E73; --c3: #CC79A7; --c4: #D55E00; --c5: #56B4E9; --c6: #6C5CC9; --c7: #7A8F1C; --c8: #8B5E3C; --cn: #8A9993;
+  --c0: #0072B2; --c1: #E69F00; --c2: #009E73; --c3: #CC79A7; --c4: #D55E00; --c5: #56B4E9; --c6: #6C5CC9; --c7: #7A8F1C; --c8: #8B5E3C; --c9: #5C7A99; --cn: #8A9993;
   --r: 14px; --nav-h: 64px;
   color-scheme: light;
 }
@@ -15,7 +15,7 @@
   :root {
     --paper: #0B1310; --sheet: #151F1B; --ink: #E7EFEB; --ink2: #A3B3AC; --line: #2A3833; --wash: #1D2925;
     --accent: #4FD1A8; --on-accent: #06231B; --warn: #FF9C8A; --warn-wash: #3A1D18; --bar: #51645C;
-    --c0: #4DA3E0; --c1: #F0B429; --c2: #2FC79A; --c3: #E096BF; --c4: #F0813F; --c5: #7CC5F0; --c6: #9C8CF0; --c7: #B5C93A; --c8: #C4916A; --cn: #7B8B85;
+    --c0: #4DA3E0; --c1: #F0B429; --c2: #2FC79A; --c3: #E096BF; --c4: #F0813F; --c5: #7CC5F0; --c6: #9C8CF0; --c7: #B5C93A; --c8: #C4916A; --c9: #8FA9C4; --cn: #7B8B85;
     color-scheme: dark;
   }
 }
@@ -80,7 +80,7 @@ h1, h2, h3, p { margin: 0; }
 .lrow .val small { font-weight: 400; color: var(--ink2); font-size: 14px; }
 .dot { width: 12px; height: 12px; border-radius: 4px; flex: none; background: var(--cn); }
 .dot.c0 { background: var(--c0); } .dot.c1 { background: var(--c1); } .dot.c2 { background: var(--c2); } .dot.c3 { background: var(--c3); }
-.dot.c4 { background: var(--c4); } .dot.c5 { background: var(--c5); } .dot.c6 { background: var(--c6); } .dot.c7 { background: var(--c7); } .dot.c8 { background: var(--c8); }
+.dot.c4 { background: var(--c4); } .dot.c5 { background: var(--c5); } .dot.c6 { background: var(--c6); } .dot.c7 { background: var(--c7); } .dot.c8 { background: var(--c8); } .dot.c9 { background: var(--c9); }
 .meter { display: block; height: 8px; border-radius: 4px; background: var(--wash); margin-top: 8px; overflow: hidden; }
 .meter i { display: block; height: 100%; border-radius: 4px; background: var(--ink2); }
 .meter.over i { background: var(--warn); }
@@ -116,7 +116,7 @@ h1, h2, h3, p { margin: 0; }
 .hbar .track { display: block; height: 10px; border-radius: 4px; background: var(--wash); margin-top: 8px; }
 .hbar .track i { display: block; height: 100%; border-radius: 4px; background: var(--cn); min-width: 4px; }
 .hbar .track i.c0 { background: var(--c0); } .hbar .track i.c1 { background: var(--c1); } .hbar .track i.c2 { background: var(--c2); } .hbar .track i.c3 { background: var(--c3); }
-.hbar .track i.c4 { background: var(--c4); } .hbar .track i.c5 { background: var(--c5); } .hbar .track i.c6 { background: var(--c6); } .hbar .track i.c7 { background: var(--c7); } .hbar .track i.c8 { background: var(--c8); }
+.hbar .track i.c4 { background: var(--c4); } .hbar .track i.c5 { background: var(--c5); } .hbar .track i.c6 { background: var(--c6); } .hbar .track i.c7 { background: var(--c7); } .hbar .track i.c8 { background: var(--c8); } .hbar .track i.c9 { background: var(--c9); }
 table.t { width: 100%; border-collapse: collapse; font-size: 15px; }
 table.t th { text-align: left; font-weight: 500; color: var(--ink2); font-size: 13px; padding: 10px 0 6px; }
 table.t th:not(:first-child), table.t td:not(:first-child) { text-align: right; }
@@ -261,3 +261,12 @@ section + .btn { margin-top: 26px; }
 .shop-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .shop-row .lrow { flex: 1; min-width: 0; }
 .shop-row .ibtn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: var(--ink2); flex: none; }
+
+/* Чек по категоріях */
+.split-list { margin-top: 6px; }
+.split-row { display: grid; grid-template-columns: 96px 1fr 44px; gap: 8px; align-items: center; padding: 10px 0; }
+.split-row + .split-row { border-top: 1px solid var(--line); }
+.split-row .sname { grid-column: 1 / -1; font-weight: 500; overflow-wrap: anywhere; }
+.split-row .in { min-height: 44px; padding: 0 10px; }
+.split-row .ibtn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; color: var(--ink2); }
+.split-sum { margin-top: 10px; padding-top: 4px; border-top: 2px solid var(--line); }

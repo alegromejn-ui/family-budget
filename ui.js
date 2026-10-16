@@ -509,7 +509,7 @@
       '<label class="field"><span>Нотатка</span><input class="in" id="tx-note" maxlength="200" list="note-list" autocomplete="off" placeholder="За бажанням" value="' + esc(t ? t.note : '') + '"></label></div>' +
       '<datalist id="note-list">' + F.noteSuggestions().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
       '<div id="tx-scan-wrap"' + (kind === 'expense' ? '' : ' hidden') + '><button type="button" class="scan" id="tx-scan" data-act="scan">' + ic('camera') + 'Сфотографувати чек</button><input type="file" id="tx-file" accept="image/*" hidden>' +
-      '<p class="note" id="tx-scan-note">Фото чека надсилається в Google Gemini для розпізнавання, на сервері родини воно не зберігається.</p></div>' +
+      '<p class="note" id="tx-scan-note">Фото чека або скриншот замовлення з інтернет-магазину надсилається в Google Gemini для розпізнавання, на сервері родини воно не зберігається.</p></div>' +
       '<button class="btn" type="submit">Зберегти</button>' + (t ? '<button type="button" class="btn alt" data-act="repeat-tx" data-id="' + esc(id) + '">' + ic('repeat', 'sm') + 'Повторити сьогодні</button><button type="button" class="btn danger" data-act="del-tx" data-id="' + esc(id) + '">' + ic('trash', 'sm') + 'Видалити</button>' : '') + '</form>';
     openSheet(html, { focus: t ? null : '#tx-amount' });
   }
@@ -526,11 +526,59 @@
       closeSheet(); render(); toast(label(a.tx), 'Скасувати', function () { F.setDeleted(a.tx.id, true); render(); });
     }
   }
+  // ---------- Чек по позиціях ----------
+  var splitCtx = null;
+  function shouldSplit(r) {
+    if (!(r && r.total && r.items && r.items.length >= 2)) return false;
+    var seen = {}; r.items.forEach(function (x) { seen[x.category] = 1; }); return Object.keys(seen).length >= 2;
+  }
+  function catOptions(sel) { return F.categories().map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === sel ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join(''); }
+  function splitRowHtml(name, amount, cat) {
+    return '<div class="split-row"><span class="sname">' + esc(name) + '</span><input class="in" inputmode="decimal" autocomplete="off" aria-label="Сума: ' + esc(name) + '" value="' + esc(String(amount).replace('.', ',')) + '">' +
+      '<select class="in" aria-label="Категорія: ' + esc(name) + '">' + catOptions(cat) + '</select><button type="button" class="ibtn" data-act="split-del" aria-label="Прибрати: ' + esc(name) + '">' + ic('x') + '</button></div>';
+  }
+  function openSplit(r, formDate) {
+    splitCtx = { total: r.total, currency: r.currency, items: r.items, itemsSum: r.itemsSum, merchant: r.merchant };
+    var rows = r.items.map(function (x) { return splitRowHtml(x.name || 'Позиція', x.amount, x.category); });
+    var rest = F.round2(r.total - r.itemsSum);
+    if (rest > 0.009) rows.push(splitRowHtml('Решта чека (знижки, нерозпізнане)', rest, 'other'));
+    var c = r.currency ? (CUR_MAP[r.currency.toUpperCase()] || r.currency) : ''; var curWarn = c && c !== cur() ? ' На чеку валюта ' + c + ', а в додатку ' + cur() + ': перевірте суми.' : '';
+    var html = '<form data-form="split" novalidate>' + sheetTop('Чек по категоріях', 'Покупки з чека розкладено по категоріях. Перевірте суми й за потреби змініть категорію. Для кожної категорії буде записано окрему витрату.' + esc(curWarn)) +
+      '<div class="row2"><label class="field"><span>Дата</span><input class="in" type="date" id="sp-date" value="' + esc(r.date || formDate || F.todayStr()) + '"></label>' +
+      '<label class="field"><span>Магазин</span><input class="in" id="sp-note" maxlength="200" list="note-list" autocomplete="off" placeholder="За бажанням" value="' + esc(r.merchant) + '"></label></div>' +
+      '<datalist id="note-list">' + F.noteSuggestions().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
+      '<div class="split-list" id="split-list">' + rows.join('') + '</div>' +
+      '<div class="split-sum" id="split-sum" aria-live="polite"></div><p class="note bad" id="split-err" role="alert" hidden></p>' +
+      '<button class="btn" type="submit" id="split-save">Записати</button><button type="button" class="btn alt" data-act="split-one">Записати одним платежем</button></form>';
+    openSheet(html); updateSplit();
+  }
+  function splitRows() {
+    return $$('#split-list .split-row').map(function (row) { var i = $('input', row), s = $('select', row); return { raw: i.value, amount: F.parseAmount(i.value), category: s.value, name: $('.sname', row).textContent }; });
+  }
+  function updateSplit() {
+    var box = $('#split-sum'); if (!box || !splitCtx) return; var rows = splitRows();
+    var bad = rows.some(function (x) { return x.amount == null; }); var by = {}, order = [], total = 0;
+    rows.forEach(function (x) { if (x.amount == null) return; total += x.amount; if (!(x.category in by)) { by[x.category] = 0; order.push(x.category); } by[x.category] += x.amount; });
+    total = F.round2(total);
+    var h = order.length ? '<ul class="ledger">' + order.map(function (id) { var c = F.catById(id); return '<li><span class="lrow"><span class="name">' + catDot(c) + '<b>' + esc(c.name) + '</b></span><span class="lead"></span><span class="val num">' + money(F.round2(by[id])) + '</span></span></li>'; }).join('') + '</ul>' : '<p class="hint">Усі позиції прибрано.</p>';
+    h += '<p class="lrow" style="padding-top:8px"><span class="name"><b>Разом</b></span><span class="lead"></span><span class="val num">' + money(total) + '</span></p>';
+    if (bad) h += '<p class="status bad">' + ic('alert', 'sm') + 'У деяких рядках сума не число більше нуля.</p>';
+    else if (Math.abs(total - splitCtx.total) > 0.009) h += '<p class="status' + (total > splitCtx.total ? ' bad' : '') + '">' + (total > splitCtx.total ? ic('alert', 'sm') : '') + 'На чеку ' + money(splitCtx.total) + (total > splitCtx.total ? '. Можливо, не враховано знижку.' : '.') + '</p>';
+    box.innerHTML = h;
+    var n = order.length; var b = $('#split-save'); if (b) { b.textContent = n ? 'Записати ' + n + ' ' + plural(n, 'витрату', 'витрати', 'витрат') : 'Записати'; b.disabled = !n; }
+  }
+  function submitSplit() {
+    var rows = splitRows(); var res = F.addSplit({ date: $('#sp-date').value, note: $('#sp-note').value, rows: rows.map(function (x) { return { category: x.category, amount: x.raw }; }) });
+    if (res.error) return showErr('split-err', res.error);
+    var sum = F.round2(res.txs.reduce(function (t, x) { return t + x.amount; }, 0)); var n = res.txs.length; splitCtx = null;
+    closeSheet(); render(); toast('Записано ' + n + ' ' + plural(n, 'витрату', 'витрати', 'витрат') + ' на ' + money(sum), 'Скасувати', function () { res.txs.forEach(function (t) { F.setDeleted(t.id, true); }); render(); }, 7000);
+  }
   async function doScan(file) {
     var btn = $('#tx-scan'); var note = $('#tx-scan-note'); if (!btn || !file) return;
     btn.disabled = true; btn.lastChild.textContent = 'Читаю чек…'; note.className = 'note'; note.textContent = 'Це триває кілька секунд.';
     try {
-      var r = await F.scanReceipt(file); var parts = [];
+      var formDate = $('#tx-date') ? $('#tx-date').value : ''; var r = await F.scanReceipt(file); var parts = [];
+      if (shouldSplit(r)) { openSplit(r, formDate); return; }
       if (r.total) { $('#tx-amount').value = String(r.total).replace('.', ','); parts.push('суму'); }
       if (r.date) { $('#tx-date').value = r.date; parts.push('дату'); }
       var radio = $('#cat-' + r.category); if (radio) { radio.checked = true; parts.push('категорію'); }
@@ -812,6 +860,12 @@
     'shop-del': function (el) { var k = attr(el, 'k') || 'shops'; F.removeTag(k, attr(el, 's')); openTags(k, true); render(); },
     'shop-find': function (el) { shopKind = attr(el, 'k') || 'shops'; shopSel = attr(el, 's'); listKind = 'expense'; query = ''; catFilter = 'all'; view = 'list'; render(); window.scrollTo(0, 0); },
     'shop-clear': function () { shopSel = null; render(); },
+    'split-del': function (el) { var row = el.closest('.split-row'); if (row) row.remove(); updateSplit(); },
+    'split-one': function () {
+      var c = splitCtx; var by = {}; splitRows().forEach(function (x) { if (x.amount != null) by[x.category] = (by[x.category] || 0) + x.amount; });
+      var top = Object.keys(by).sort(function (a, b) { return by[b] - by[a]; })[0] || 'other'; var d = $('#sp-date').value; var note = $('#sp-note').value;
+      closeSheet(); openTx(null, top); $('#tx-amount').value = String(c.total).replace('.', ','); if (d) $('#tx-date').value = d; $('#tx-note').value = note; syncShops();
+    },
     goals: function () { openGoals(); },
     'goal-edit': function (el) { openGoals(attr(el, 'id'), false); var f = $('#g-name'); if (f) f.focus(); },
     'goal-cancel': function () { openGoals(null, true); },
@@ -886,6 +940,8 @@
       var id = attr(form, 'id'); var p = { name: $('#rec-name').value, amount: $('#rec-amount').value, day: $('#rec-day').value, category: $('#rec-cat').value };
       var res = id ? F.updateRecurring(id, p) : F.addRecurring(p); if (res.error) return showErr('rec-err', res.error);
       openRecurring(null, false); render(); toast(id ? 'Платіж змінено' : 'Платіж додано');
+    } else if (kind === 'split') {
+      submitSplit();
     } else if (kind === 'shop-add') {
       var tk = attr(form, 'k') || 'shops'; var sr = F.addTag(tk, $('#shop-new').value); if (sr.error) return showErr('shop-err', sr.error);
       openTags(tk, true); render(); var ni = $('#shop-new'); if (ni) ni.focus();
@@ -921,6 +977,7 @@
 
   document.addEventListener('change', function (e) {
     var el = e.target;
+    if (el.closest && el.closest('form[data-form=split]')) { updateSplit(); return; }
     if (el.id === 'tx-file') { if (el.files && el.files[0]) doScan(el.files[0]); return; }
     if (el.id === 'import-file') {
       var f = el.files && el.files[0]; if (!f) return;
@@ -946,6 +1003,7 @@
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'q') { query = e.target.value; refreshList(); }
     if (e.target && e.target.id === 'tx-note') syncShops();
+    if (e.target && e.target.closest && e.target.closest('form[data-form=split]')) updateSplit();
   });
 
   // ---------- Запуск ----------

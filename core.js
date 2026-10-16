@@ -6,7 +6,7 @@
   var KEY = 'fb_state_v1';
   var NUTRIPLAN_KEY = 'nutriplan_user_gemini_key';
   var GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
-  var MAX_COLORED = 9;
+  var MAX_COLORED = 10;
   var CURRENCIES = ['₴', '$', '€', 'zł', '£'];
 
   var DEFAULT_CATS = [
@@ -14,6 +14,7 @@
     { id: 'cafe', name: 'Кафе й ресторани', colorIdx: 1, limit: null },
     { id: 'transport', name: 'Транспорт', colorIdx: 2, limit: null },
     { id: 'home', name: 'Комунальні послуги', colorIdx: 3, limit: null },
+    { id: 'household', name: 'Побут і господарство', colorIdx: 9, limit: null },
     { id: 'loans', name: 'Кредити', colorIdx: 7, limit: null },
     { id: 'cards', name: 'Кредити на картках', colorIdx: 8, limit: null },
     { id: 'health', name: 'Здоров’я', colorIdx: 4, limit: null },
@@ -127,7 +128,15 @@
   }
   function upgradeDefaults() {
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
-    if (S.cfg.updatedAt === 0 && !S.cfgDirty) S.cfg.categories = DEFAULT_CATS.map(function (c) { return Object.assign({}, c); });
+    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = DEFAULT_CATS.map(function (c) { return Object.assign({}, c); }); S.meta.mHousehold = 1; return; }
+    // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
+    if (!S.meta.mHousehold) {
+      S.meta.mHousehold = 1; var cats = S.cfg.categories;
+      if (cats.length < MAX_COLORED && !cats.some(function (c) { return c.id === 'household' || /побут/i.test(c.name); })) {
+        var used = {}; cats.forEach(function (c) { used[c.colorIdx] = 1; }); var ci = 9; for (var k = 0; k < MAX_COLORED; k++) if (!used[k]) { ci = k; break; }
+        cats.push({ id: 'household', name: 'Побут і господарство', colorIdx: ci, limit: null }); touchCfg();
+      } else save();
+    }
   }
 
   // ---------- Категорії ----------
@@ -742,15 +751,18 @@
   }
   function receiptPayload(base64, mime) {
     var cats = categories();
-    var prompt = 'Це фото касового чека. Знайди назву магазину, дату покупки, ПІДСУМКОВУ суму до сплати та валюту. ' +
+    var prompt = 'Це фото касового чека або скриншот замовлення з інтернет-магазину (підтвердження замовлення, кошик, лист). Знайди назву магазину або сайту, дату покупки, ПІДСУМКОВУ суму до сплати та валюту. ' +
+      'Для замовлення з інтернет-магазину дата — це дата замовлення, а не доставки; підсумок — сума до сплати разом із доставкою; доставку, якщо вона вказана окремо, додай окремою позицією «Доставка» з категорією основних товарів. ' +
       'Дату поверни як РРРР-ММ-ДД; якщо її не видно, залиш порожній рядок. Суму поверни числом без пробілів; якщо чека не видно, поверни 0. ' +
       'Категорію обери одну з переліку за змістом покупки: ' + cats.map(function (c) { return c.id + ' (' + c.name + ')'; }).join(', ') + '. ' +
-      'Якщо сумніваєшся, вибирай other.';
+      'Якщо сумніваєшся, вибирай other. ' +
+      'Також випиши ОКРЕМІ ПОЗИЦІЇ чека (не більше 40; схожі дрібні товари об\u2019єднуй): назва, ціна позиції в чеку з урахуванням знижки та категорія з того ж переліку для кожної позиції окремо. ' +
+      'Сума цін усіх позицій має дорівнювати підсумковій сумі. Не додавай до позицій рядки підсумку, решти, картки лояльності чи податку.';
     return {
       contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mime || 'image/jpeg', data: base64 } }] }],
       generationConfig: {
         responseMimeType: 'application/json',
-        responseSchema: { type: 'OBJECT', properties: { merchant: { type: 'STRING' }, date: { type: 'STRING' }, total: { type: 'NUMBER' }, currency: { type: 'STRING' }, category: { type: 'STRING', enum: cats.map(function (c) { return c.id; }) } }, required: ['merchant', 'date', 'total', 'currency', 'category'] }
+        responseSchema: { type: 'OBJECT', properties: { merchant: { type: 'STRING' }, date: { type: 'STRING' }, total: { type: 'NUMBER' }, currency: { type: 'STRING' }, category: { type: 'STRING', enum: cats.map(function (c) { return c.id; }) }, items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { name: { type: 'STRING' }, amount: { type: 'NUMBER' }, category: { type: 'STRING', enum: cats.map(function (c) { return c.id; }) } }, required: ['name', 'amount', 'category'] } } }, required: ['merchant', 'date', 'total', 'currency', 'category'] }
       }
     };
   }
@@ -760,7 +772,23 @@
     var total = parseAmount(o.total);
     var cat = categories().filter(function (c) { return c.id === o.category; })[0];
     var date = isDateStr(o.date) && o.date <= todayStr() && o.date >= addMonths(todayStr().slice(0, 7), -12) + '-01' ? o.date : '';
-    return { merchant: String(o.merchant || '').trim().slice(0, 80), date: date, total: total, currency: String(o.currency || '').trim().slice(0, 8), category: cat ? cat.id : 'other' };
+    var ids = categories().map(function (c) { return c.id; });
+    var items = (Array.isArray(o.items) ? o.items : []).slice(0, 60).map(function (it) {
+      var a = it && parseAmount(it.amount); if (a == null) return null;
+      return { name: String(it.name || '').trim().slice(0, 60), amount: a, category: ids.indexOf(it && it.category) >= 0 ? it.category : 'other' };
+    }).filter(Boolean);
+    var itemsSum = round2(items.reduce(function (t, x) { return t + x.amount; }, 0));
+    return { merchant: String(o.merchant || '').trim().slice(0, 80), date: date, total: total, currency: String(o.currency || '').trim().slice(0, 8), category: cat ? cat.id : 'other', items: items, itemsSum: itemsSum };
+  }
+  // Чек, розкладений по категоріях: одна витрата на категорію. rows: [{category, amount}]
+  function addSplit(p) {
+    var rows = (p && Array.isArray(p.rows) ? p.rows : []).map(function (x) { return { category: x.category, amount: parseAmount(x.amount) }; });
+    if (!rows.length) return { error: 'Немає що записувати.' };
+    if (rows.some(function (x) { return x.amount == null; })) return { error: 'Перевірте суми: кожна має бути більшою за нуль.' };
+    var order = [], sums = {};
+    rows.forEach(function (x) { var id = catById(x.category).id; if (!(id in sums)) { sums[id] = 0; order.push(id); } sums[id] = round2(sums[id] + x.amount); });
+    var date = p.date || todayStr(); if (!isDateStr(date)) return { error: 'Вкажіть дату.' };
+    return { txs: order.map(function (id) { return addTx({ amount: sums[id], category: id, date: date, note: p.note }).tx; }) };
   }
   function fileToJpegBase64(file, maxSide) {
     maxSide = maxSide || 1400;
@@ -828,7 +856,7 @@
     goalInfo: goalInfo, addGoal: addGoal, updateGoal: updateGoal, removeGoal: removeGoal, addContribution: addContribution, goalById: goalById,
     loanInfo: loanInfo, loansSummary: loansSummary, addLoan: addLoan, updateLoan: updateLoan, removeLoan: removeLoan, loanById: loanById,
     shopOf: shopOf, addShop: addShop, removeShop: removeShop, withShop: withShop, byShop: byShop, clubOf: clubOf, tagOf: tagOf, addTag: addTag, removeTag: removeTag, withTag: withTag, byTag: byTag,
-    repeatTx: repeatTx, bulkSetCategory: bulkSetCategory, frequent: frequent, noteSuggestions: noteSuggestions, search: search,
+    addSplit: addSplit, repeatTx: repeatTx, bulkSetCategory: bulkSetCategory, frequent: frequent, noteSuggestions: noteSuggestions, search: search,
     hasPin: hasPin, setPin: setPin, checkPin: checkPin, removePin: removePin,
     // регулярні
     addRecurring: addRecurring, updateRecurring: updateRecurring, removeRecurring: removeRecurring, materializeRecurring: materializeRecurring, upcomingRecurring: upcomingRecurring, dueDate: dueDate,

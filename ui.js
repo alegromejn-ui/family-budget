@@ -414,6 +414,7 @@
       '<li><button data-act="import-json"><span class="ico">' + ic('upload') + '</span><span class="grow"><span class="t1">Відновити з копії</span><span class="t2">Додасть записи, яких тут немає</span></span></button></li>' +
       '<li><button data-act="export-csv"><span class="ico">' + ic('list') + '</span><span class="grow"><span class="t1">Таблиця для Excel</span><span class="t2">Файл CSV з усіма витратами</span></span></button></li></ul></div></section>';
     if (F.saveFailed) h += '<p class="note bad">Телефон не дає зберегти дані: закінчилося місце. Збережіть копію й звільніть пам’ять.</p>';
+    h += '<p class="note" style="text-align:center">Версія додатка: ' + esc(F.VERSION) + '</p>';
     h += '<input type="file" id="import-file" accept="application/json,.json" hidden>';
     return h;
   }
@@ -812,7 +813,7 @@
       (src === 'nutriplan' ? '<p class="note">Зараз використовується ключ, який ви додали в NutriPlan. Можна лишити так.</p>' : '') +
       '<label class="field"><span>Ключ API</span><input class="in" id="k-val" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Вставте ключ" value="' + esc(F.state.me.geminiKey) + '"></label>' +
       '<p class="note">Ключ зберігається лише на цьому телефоні. Безкоштовний ліміт Google дозволяє їм використовувати надіслані фото для покращення продуктів, тому не знімайте чеки з особистими даними.</p>' +
-      '<button class="btn" type="submit">Зберегти</button>' + (F.state.me.geminiKey ? '<button type="button" class="btn danger" data-act="key-del">Видалити ключ</button>' : '') + '</form>';
+      '<button class="btn" type="submit">Зберегти</button>' + (F.keySource() !== 'none' ? '<button type="button" class="btn alt" data-act="key-test">Перевірити ключ</button><div class="note" id="k-test" role="status" aria-live="polite" hidden></div>' : '') + (F.state.me.geminiKey ? '<button type="button" class="btn danger" data-act="key-del">Видалити ключ</button>' : '') + '</form>';
     openSheet(html, { focus: '#k-val' });
   }
 
@@ -896,6 +897,12 @@
     budget: function () { openBudget(); },
     recurring: function () { openRecurring(); },
     key: function () { openKey(); },
+    'key-test': function (el) {
+      var box = $('#k-test'); if (!box) return; box.hidden = false; box.textContent = 'Перевіряю…'; el.disabled = true;
+      F.testKey().then(function (rows) {
+        box.innerHTML = rows.map(function (r) { return '<div>' + (r.ok ? '✓ ' : '✗ ') + '<b>' + esc(r.step) + '</b>: ' + esc(r.text) + '</div>'; }).join('');
+      }).catch(function () { box.textContent = 'Не вдалося виконати перевірку.'; }).then(function () { el.disabled = false; });
+    },
     'key-del': function () { F.setGeminiKey(''); closeSheet(); render(); toast('Ключ видалено'); },
     scan: function () { $('#tx-file').click(); },
     'del-tx': function (el) {

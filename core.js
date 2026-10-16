@@ -719,6 +719,14 @@
   }
   function keySource() { if ((S.me.geminiKey || '').trim()) return 'own'; return geminiKey() ? 'nutriplan' : 'none'; }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  // Пояснення від Google з відповіді на помилку: JSON-повідомлення, а якщо відповідь не JSON — початок тексту без тегів.
+  async function errorDetail(res) {
+    var raw = '';
+    try { raw = typeof res.text === 'function' ? await res.text() : JSON.stringify(await res.json()); } catch (e) { return ''; }
+    raw = String(raw || '').trim(); if (!raw) return '';
+    try { var o = JSON.parse(raw); var em = o && o.error; var m = em && (em.message || em.status); if (m) return String(m).slice(0, 300); } catch (e2) { /* не JSON */ }
+    return raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+  }
   async function geminiRequest(payload) {
     var apiKey = geminiKey();
     if (!apiKey) { var e0 = new Error('NO_KEY'); e0.code = 'NO_KEY'; throw e0; }
@@ -731,13 +739,31 @@
         catch (ne) { lastErr = new Error('NETWORK'); lastErr.code = 'NETWORK'; if (attempt === delays.length) break; await sleep(delays[attempt]); continue; }
         if (res.ok) return res.json();
         lastErr = new Error('HTTP ' + res.status); lastErr.code = 'HTTP_' + res.status; lastErr.status = res.status;
-        try { var eb = await res.json(); var em = eb && eb.error; lastErr.detail = String((em && (em.message || em.status)) || '').slice(0, 300); } catch (be) { lastErr.detail = ''; }
+        lastErr.model = GEMINI_MODELS[mi]; lastErr.detail = await errorDetail(res);
         if (res.status === 404) break;
         if (res.status === 429 || res.status >= 500) { if (attempt === delays.length) break; await sleep(delays[attempt]); continue; }
         throw lastErr;
       }
     }
     throw lastErr || new Error('UNKNOWN');
+  }
+  // Діагностика ключа: кожен крок показує код і пояснення Google (ключ ніколи не потрапляє в адресу чи результат).
+  async function testKey() {
+    var apiKey = geminiKey(); var out = [];
+    if (!apiKey) return [{ ok: false, step: 'Ключ', text: 'ключ не додано' }];
+    async function run(step, url, opts) {
+      var r;
+      try { r = await FB.fetch(url, opts); } catch (e) { out.push({ ok: false, step: step, text: 'немає зв’язку з Google (мережа, VPN або блокувальник)' }); return; }
+      if (r.ok) { out.push({ ok: true, step: step, text: 'ОК (' + r.status + ')' }); return; }
+      var d = await errorDetail(r); out.push({ ok: false, step: step, text: 'код ' + r.status + (d ? ': ' + d.slice(0, 160) : ', без пояснення') });
+    }
+    var H = { 'x-goog-api-key': apiKey };
+    await run('Список моделей', 'https://generativelanguage.googleapis.com/v1beta/models', { method: 'GET', headers: H });
+    var body = JSON.stringify({ contents: [{ parts: [{ text: 'Відповідай одним словом: ок' }] }] });
+    for (var i = 0; i < GEMINI_MODELS.length; i++) {
+      await run(GEMINI_MODELS[i], 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODELS[i] + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, body: body });
+    }
+    return out;
   }
   function describeGeminiError(err) {
     var st = err && err.status;
@@ -750,7 +776,7 @@
       if (/referer|referrer/.test(low)) return 'Ключ обмежено за сайтом (код ' + st + '). У Google AI Studio зніміть обмеження за адресою сайту або додайте alegromejn-ui.github.io.';
       if (/not valid|invalid/.test(low)) return 'Google вважає ключ недійсним (код ' + st + '). Скопіюйте його ще раз повністю.';
       if (/has not been used|disabled|not enabled/.test(low)) return 'У проєкті цього ключа вимкнено Gemini API (код ' + st + '). Увімкніть його в Google AI Studio або створіть новий ключ.';
-      return 'Gemini відхилив запит (код ' + st + '). Перевірте, чи ключ скопійовано повністю і чи він активний.' + (d ? ' Відповідь Google: «' + d.slice(0, 160) + '».' : '');
+      return 'Gemini відхилив запит (код ' + st + (err.model ? ', ' + err.model : '') + '). ' + (d ? 'Відповідь Google: «' + d.slice(0, 160) + '».' : 'Google не пояснив причину.') + ' Натисніть «Перевірити ключ» у налаштуваннях розпізнавання.';
     }
     if (st === 404) return 'Жодна з моделей Gemini недоступна для вашого ключа.';
     if (st === 429) return 'Перевищено ліміт запитів Gemini. Зачекайте хвилину.';
@@ -873,7 +899,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, VERSION: 'v8', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

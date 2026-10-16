@@ -731,6 +731,7 @@
         catch (ne) { lastErr = new Error('NETWORK'); lastErr.code = 'NETWORK'; if (attempt === delays.length) break; await sleep(delays[attempt]); continue; }
         if (res.ok) return res.json();
         lastErr = new Error('HTTP ' + res.status); lastErr.code = 'HTTP_' + res.status; lastErr.status = res.status;
+        try { var eb = await res.json(); var em = eb && eb.error; lastErr.detail = String((em && (em.message || em.status)) || '').slice(0, 300); } catch (be) { lastErr.detail = ''; }
         if (res.status === 404) break;
         if (res.status === 429 || res.status >= 500) { if (attempt === delays.length) break; await sleep(delays[attempt]); continue; }
         throw lastErr;
@@ -743,7 +744,14 @@
     if (err && err.code === 'NO_KEY') return 'Для розпізнавання чеків потрібен ключ Gemini. Додайте його в «Ще».';
     if (err && err.code === 'NETWORK') return 'Немає інтернету. Спробуйте ще раз або введіть суму вручну.';
     if (err && err.code === 'BAD_JSON') return 'Не вдалося прочитати чек. Спробуйте зробити фото рівніше й ближче.';
-    if (st === 400 || st === 401 || st === 403) return 'Gemini відхилив запит (код ' + st + '). Перевірте, чи ключ скопійовано повністю і чи він активний.';
+    if (st === 400 || st === 401 || st === 403) {
+      var d = String((err && err.detail) || ''); var low = d.toLowerCase();
+      if (/leak/.test(low)) return 'Google вимкнув цей ключ, бо він був у відкритому доступі (код ' + st + '). Створіть новий ключ на aistudio.google.com/apikey і вставте його тут.';
+      if (/referer|referrer/.test(low)) return 'Ключ обмежено за сайтом (код ' + st + '). У Google AI Studio зніміть обмеження за адресою сайту або додайте alegromejn-ui.github.io.';
+      if (/not valid|invalid/.test(low)) return 'Google вважає ключ недійсним (код ' + st + '). Скопіюйте його ще раз повністю.';
+      if (/has not been used|disabled|not enabled/.test(low)) return 'У проєкті цього ключа вимкнено Gemini API (код ' + st + '). Увімкніть його в Google AI Studio або створіть новий ключ.';
+      return 'Gemini відхилив запит (код ' + st + '). Перевірте, чи ключ скопійовано повністю і чи він активний.' + (d ? ' Відповідь Google: «' + d.slice(0, 160) + '».' : '');
+    }
     if (st === 404) return 'Жодна з моделей Gemini недоступна для вашого ключа.';
     if (st === 429) return 'Перевищено ліміт запитів Gemini. Зачекайте хвилину.';
     if (st >= 500) return 'Сервіс Gemini тимчасово недоступний. Спробуйте пізніше.';

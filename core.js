@@ -6,7 +6,7 @@
   var KEY = 'fb_state_v1';
   var NUTRIPLAN_KEY = 'nutriplan_user_gemini_key';
   var GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
-  var MAX_COLORED = 10;
+  var MAX_COLORED = 12;
   var CURRENCIES = ['₴', '$', '€', 'zł', '£'];
 
   var DEFAULT_CATS = [
@@ -19,6 +19,7 @@
     { id: 'cards', name: 'Кредити на картках', colorIdx: 8, limit: null },
     { id: 'health', name: 'Здоров’я', colorIdx: 4, limit: null },
     { id: 'kids', name: 'Діти', colorIdx: 5, limit: null },
+    { id: 'clothes', name: 'Одяг та взуття', colorIdx: 10, limit: null },
     { id: 'fun', name: 'Розваги й подарунки', colorIdx: 6, limit: null }
   ];
   var OTHER = { id: 'other', name: 'Інше', colorIdx: -1, limit: null };
@@ -33,6 +34,7 @@
     household: [['chem', 'Побутова хімія'], ['hyg', 'Гігієна'], ['repair', 'Ремонт та інструменти'], ['tech', 'Техніка'], ['decor', 'Меблі й декор']],
     health: [['pharm', 'Ліки'], ['doctor', 'Лікарі й аналізи'], ['dent', 'Стоматолог'], ['vit', 'Вітаміни']],
     kids: [['school', 'Школа й садок'], ['clubs', 'Гуртки й секції'], ['toys', 'Іграшки'], ['clothes', 'Одяг і взуття'], ['stationery', 'Канцтовари'], ['trifles', 'Дурниці']],
+    clothes: [['clothes', 'Одяг'], ['shoes', 'Взуття'], ['acc', 'Аксесуари']],
     fun: [['gifts', 'Подарунки'], ['cinema', 'Кіно й розваги'], ['hobby', 'Хобі'], ['trip', 'Відпочинок і подорожі'], ['subs', 'Підписки']]
   };
   function defaultSubs(catId) { return (DEFAULT_SUBS[catId] || []).map(function (x) { return { id: x[0], name: x[1] }; }); }
@@ -79,15 +81,31 @@
   function b64dec(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
 
   // ---------- Стан ----------
-  var NEW_SHOPS = ['Сільпо', 'АТБ', 'Маудау', 'Інтернет магазини'];
+  var NEW_SHOPS = ['Silpo', 'АТБ', 'Maudau', 'Інтернет магазини'];
   var NEW_SHOPS3 = ['Аврора', 'Базар'];
-  var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'].concat(NEW_SHOPS, NEW_SHOPS3);
+  var NEW_SHOPS4 = ['Fozzy', 'EVA'];
+  // Старі українські назви: записи з ними й далі рахуються за новим магазином
+  var SHOP_RENAME = { 'сільпо': 'Silpo', 'маудау': 'Maudau' };
+  var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'].concat(NEW_SHOPS, NEW_SHOPS3, NEW_SHOPS4);
   function cleanShops(a) {
     var seen = {}, out = [];
     (Array.isArray(a) ? a : []).forEach(function (x) { var n = String(x == null ? '' : x).trim().replace(/\s+/g, ' ').slice(0, 30); var k = n.toLowerCase(); if (n && !seen[k] && out.length < 30) { seen[k] = 1; out.push(n); } });
     return out;
   }
-  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], otherSubs: [], updatedAt: 0 }; }
+  // Кредитки: борг рахується з записів «взяли» (+) і «погасили» (−), тому їх видно всім у родині
+  var MAX_CARDS = 6;
+  function defaultCards() { return [{ id: 'maks', name: 'Максим', limit: null }, { id: 'nata', name: 'Наташа', limit: null }]; }
+  function cleanCards(a) {
+    var out = [], ids = {}, names = {};
+    (Array.isArray(a) ? a : []).forEach(function (x) {
+      if (!x || out.length >= MAX_CARDS) return;
+      var name = String(x.name == null ? '' : x.name).replace(/\|/g, '/').replace(/\s+/g, ' ').trim().slice(0, 30); if (!name || names[name.toLowerCase()]) return;
+      var id = /^[a-z0-9_]{1,12}$/.test(String(x.id)) ? String(x.id) : ''; if (!id || ids[id]) return;
+      ids[id] = 1; names[name.toLowerCase()] = 1; out.push({ id: id, name: name, limit: x.limit == null || x.limit === '' ? null : parseAmount(x.limit) });
+    });
+    return out;
+  }
+  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], otherSubs: [], cards: defaultCards(), updatedAt: 0 }; }
   function freshState() {
     return {
       v: 1, txs: {}, cfg: defaultCfg(), cfgDirty: false,
@@ -126,6 +144,7 @@
       shops: Array.isArray(c.shops) ? cleanShops(c.shops) : DEFAULT_SHOPS.slice(),
       clubs: cleanShops(c.clubs),
       otherSubs: cleanSubs(c.otherSubs),
+      cards: Array.isArray(c.cards) ? cleanCards(c.cards) : defaultCards(),
       updatedAt: Number(c.updatedAt) || 0
     };
   }
@@ -179,6 +198,23 @@
         if (S.cfg.updatedAt === 0 && !S.cfgDirty) save(); else touchCfg();
       } else save();
     }
+    // Silpo й Maudau англійською, плюс Fozzy та EVA
+    if (!S.meta.mShops4) {
+      S.meta.mShops4 = 1; var ch4 = false;
+      var list4 = S.cfg.shops.map(function (n) { var to = SHOP_RENAME[n.toLowerCase()]; if (to) { ch4 = true; return to; } return n; });
+      if (list4.length) {
+        var have4 = {}; list4.forEach(function (n) { have4[n.toLowerCase()] = 1; });
+        NEW_SHOPS4.forEach(function (n) { if (!have4[n.toLowerCase()]) { list4.push(n); ch4 = true; } });
+      }
+      if (ch4) { S.cfg.shops = cleanShops(list4); if (S.cfg.updatedAt === 0 && !S.cfgDirty) save(); else touchCfg(); } else save();
+      // Нотатки «Сільпо молоко» → «Silpo молоко»
+      var nr = 0;
+      Object.keys(S.txs).forEach(function (k) {
+        var t = S.txs[k]; if (t.deleted) return; var m = matchTag(t.note, Object.keys(SHOP_RENAME)); if (!m) return;
+        t.note = SHOP_RENAME[m] + String(t.note).trim().slice(m.length); t.updatedAt = stamp(t.updatedAt); t.dirty = true; nr++;
+      });
+      if (nr) { save(); scheduleSync(); }
+    }
     // Один раз додаємо до «Дітей» види «Канцтовари» й «Дурниці» (якщо їх там ще немає)
     if (!S.meta.mKidsSubs) {
       S.meta.mKidsSubs = 1;
@@ -192,13 +228,21 @@
       if (changed && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
     }
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
-    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; return; }
+    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; return; }
     // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
     if (!S.meta.mHousehold) {
       S.meta.mHousehold = 1; var cats = S.cfg.categories;
       if (cats.length < MAX_COLORED && !cats.some(function (c) { return c.id === 'household' || /побут/i.test(c.name); })) {
         var used = {}; cats.forEach(function (c) { used[c.colorIdx] = 1; }); var ci = 9; for (var k = 0; k < MAX_COLORED; k++) if (!used[k]) { ci = k; break; }
         cats.push({ id: 'household', name: 'Побут і господарство', colorIdx: ci, limit: null, subs: defaultSubs('household') }); touchCfg();
+      } else save();
+    }
+    // Один раз додаємо «Одяг та взуття» до вже налаштованого набору
+    if (!S.meta.mClothes) {
+      S.meta.mClothes = 1; var cs = S.cfg.categories;
+      if (cs.length < MAX_COLORED && !cs.some(function (c) { return c.id === 'clothes' || /^одяг/i.test(c.name); })) {
+        var usedC = {}; cs.forEach(function (c) { usedC[c.colorIdx] = 1; }); var cc = 10; for (var q = 0; q < MAX_COLORED; q++) if (!usedC[q]) { cc = q; break; }
+        cs.push({ id: 'clothes', name: 'Одяг та взуття', colorIdx: cc, limit: null, subs: defaultSubs('clothes') }); touchCfg();
       } else save();
     }
   }
@@ -318,14 +362,16 @@
     id = String(id || '');
     if (/^in_/.test(id)) { var ic = INCOME_CATS.filter(function (x) { return x.id === id; })[0] || INCOME_CATS[INCOME_CATS.length - 1]; return { id: ic.id, name: ic.name, colorIdx: -2, kind: 'income' }; }
     if (/^sv_/.test(id)) { var g = goalById(id.slice(3)); return { id: id, name: g ? g.name : (fallbackName || 'Накопичення'), colorIdx: -3, kind: 'saving', missing: !g }; }
+    if (/^cc_/.test(id)) { var cd = cardById(id.slice(3)); return { id: id, name: 'Кредитка: ' + (cd ? cd.name : (String(fallbackName || '').replace(/^Кредитка: /, '') || 'видалена')), colorIdx: -4, kind: 'card', missing: !cd }; }
     var c = catById(id, fallbackName); return { id: c.id, name: c.name, colorIdx: c.colorIdx, limit: c.limit, kind: 'expense' };
   }
   function catInfo(t) { return resolveCat(t.category, t.cn); }
-  function kindOf(t) { return /^in_/.test(t.category) ? 'income' : /^sv_/.test(t.category) ? 'saving' : 'expense'; }
+  function kindOf(t) { return /^in_/.test(t.category) ? 'income' : /^sv_/.test(t.category) ? 'saving' : /^cc_/.test(t.category) ? 'card' : 'expense'; }
   function addTx(p) {
     var cat = resolveCat(p.category, '');
     if (cat.kind === 'saving' && cat.missing) return { error: 'Цілі не знайдено.' };
-    var amount = parseAmount(p.amount, cat.kind === 'saving');
+    if (cat.kind === 'card' && cat.missing) return { error: 'Кредитку не знайдено.' };
+    var amount = parseAmount(p.amount, cat.kind === 'saving' || cat.kind === 'card');
     if (amount == null) return { error: cat.kind === 'saving' ? 'Введіть суму (мінус означає зняття).' : 'Введіть суму більше нуля.' };
     var date = p.date || todayStr();
     if (!isDateStr(date)) return { error: 'Вкажіть дату.' };
@@ -339,7 +385,7 @@
     var t = S.txs[id]; if (!t) return { error: 'Запис не знайдено.' };
     var before = Object.assign({}, t);
     var cat = resolveCat(p.category, t.cn);
-    var amount = parseAmount(p.amount, cat.kind === 'saving'); if (amount == null) return { error: cat.kind === 'saving' ? 'Введіть суму (мінус означає зняття).' : 'Введіть суму більше нуля.' };
+    var amount = parseAmount(p.amount, cat.kind === 'saving' || cat.kind === 'card'); if (amount == null) return { error: cat.kind === 'saving' ? 'Введіть суму (мінус означає зняття).' : 'Введіть суму більше нуля.' };
     if (!isDateStr(p.date)) return { error: 'Вкажіть дату.' };
     // категорію, якої вже немає, не перейменовуємо мовчки
     var keepName = (cat.id === 'other' && p.category !== 'other') || cat.missing;
@@ -572,6 +618,53 @@
     S.cfg.loans = S.cfg.loans.filter(function (x) { return x.id !== id; }); touchCfg();
   }
 
+  // ---------- Кредитки (беремо гроші, потім гасимо із зарплати) ----------
+  function cards() { return S.cfg.cards || []; }
+  function cardById(id) { return cards().filter(function (x) { return x.id === id; })[0]; }
+  function cardTxs(id) { return allLive().filter(function (t) { return t.category === 'cc_' + id; }).sort(byDateDesc); }
+  function cardDebt(id) { return round2(cardTxs(id).reduce(function (s, t) { return s + t.amount; }, 0)); }
+  function cardsSummary() {
+    var total = 0; var items = cards().map(function (cd) {
+      var debt = cardDebt(cd.id); total += Math.max(0, debt);
+      return { card: cd, debt: debt, free: cd.limit != null ? round2(cd.limit - Math.max(0, debt)) : null, last: cardTxs(cd.id)[0] || null };
+    });
+    return { total: round2(total), items: items };
+  }
+  // sign: 1 — взяли з кредитки, -1 — погасили
+  function cardMove(id, sign, amount, date, note) {
+    var cd = cardById(id); if (!cd) return { error: 'Кредитку не знайдено.' };
+    var a = parseAmount(amount); if (a == null) return { error: 'Введіть суму більше нуля.' };
+    return addTx({ amount: sign < 0 ? -a : a, category: 'cc_' + id, date: date, note: note || '' });
+  }
+  // Уточнити борг за випискою: записується різниця, тож історія лишається
+  function setCardDebt(id, value) {
+    var cd = cardById(id); if (!cd) return { error: 'Кредитку не знайдено.' };
+    var v = String(value).trim() === '0' ? 0 : parseAmount(value); if (v == null) return { error: 'Вкажіть борг: 0 або більше.' };
+    var diff = round2(v - cardDebt(id)); if (!diff) return { same: true };
+    return addTx({ amount: diff, category: 'cc_' + id, date: todayStr(), note: 'Уточнення боргу' });
+  }
+  function cardFields(p) {
+    var name = String(p.name == null ? '' : p.name).replace(/\|/g, '/').replace(/\s+/g, ' ').trim().slice(0, 30); if (!name) return { error: 'Введіть назву, наприклад ім’я власника.' };
+    var lim = p.limit == null || String(p.limit).trim() === '' ? null : parseAmount(p.limit); if (lim === null && p.limit != null && String(p.limit).trim() !== '') return { error: 'Ліміт має бути додатним числом.' };
+    return { name: name, limit: lim };
+  }
+  function addCard(p) {
+    if (cards().length >= MAX_CARDS) return { error: 'Можна мати до ' + MAX_CARDS + ' кредиток.' };
+    var f = cardFields(p); if (f.error) return f;
+    if (cards().some(function (x) { return x.name.toLowerCase() === f.name.toLowerCase(); })) return { error: 'Кредитка з такою назвою вже є.' };
+    var cd = { id: 'k' + rid(6), name: f.name, limit: f.limit }; S.cfg.cards = cards().concat([cd]); touchCfg(); return { card: cd };
+  }
+  function updateCard(id, p) {
+    var cd = cardById(id); if (!cd) return { error: 'Кредитку не знайдено.' };
+    var f = cardFields(p); if (f.error) return f;
+    if (cards().some(function (x) { return x.id !== id && x.name.toLowerCase() === f.name.toLowerCase(); })) return { error: 'Кредитка з такою назвою вже є.' };
+    cd.name = f.name; cd.limit = f.limit; touchCfg(); return { card: cd };
+  }
+  function removeCard(id) {
+    if (Math.abs(cardDebt(id)) > 0.005) return { error: 'На цій кредитці є борг. Спершу погасіть його або уточніть борг до 0.' };
+    S.cfg.cards = cards().filter(function (x) { return x.id !== id; }); touchCfg(); return { ok: true };
+  }
+
   // ---------- Швидке додавання, пошук, підсумок ----------
   function frequent(limit) {
     var from = F_daysAgo(120); var m = {};
@@ -628,7 +721,12 @@
     }
     return null;
   }
-  function tagOf(t, kind) { return matchTag(t.note, S.cfg[kind]); }
+  function tagOf(t, kind) {
+    var hit = matchTag(t.note, S.cfg[kind]); if (hit || kind !== 'shops') return hit;
+    // запис зі старого телефона: «Сільпо …» рахуємо як Silpo, якщо Silpo є у списку
+    var old = matchTag(t.note, Object.keys(SHOP_RENAME)); if (!old) return null;
+    var to = SHOP_RENAME[old]; return S.cfg.shops.filter(function (n) { return n === to; })[0] || null;
+  }
   function shopOf(t) { return tagOf(t, 'shops'); }
   function clubOf(t) { return tagOf(t, 'clubs'); }
   function addTag(kind, name) {
@@ -643,7 +741,7 @@
   // Нотатка з вибраною назвою: «Кубиха», «Кубиха молоко». Порожня назва прибирає її; замінюється будь-який відомий префікс.
   function withTag(note, name) {
     note = String(note || '').trim();
-    var cur = matchTag(note, S.cfg.shops.concat(S.cfg.clubs));
+    var cur = matchTag(note, S.cfg.shops.concat(S.cfg.clubs, Object.keys(SHOP_RENAME)));
     var rest = cur ? note.slice(cur.length).replace(/^[\s,:;-]+/, '') : note;
     return name ? (rest ? name + ' ' + rest : name) : rest;
   }
@@ -842,7 +940,7 @@
   function exportCSV() {
     function q(v) { v = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(v)) v = '’' + v; return '"' + v.replace(/"/g, '""') + '"'; }
     var rows = [['Дата', 'Сума', 'Категорія', 'Нотатка', 'Хто', 'Тип', 'Вид']];
-    var KIND = { expense: 'Витрата', income: 'Дохід', saving: 'Накопичення' };
+    var KIND = { expense: 'Витрата', income: 'Дохід', saving: 'Накопичення', card: 'Кредитка' };
     allLive().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.updatedAt - b.updatedAt; }).forEach(function (t) {
       rows.push([t.date, String(t.amount).replace('.', ','), catInfo(t).name, t.note, t.member, KIND[kindOf(t)], (subOf(t) || { name: '' }).name]);
     });
@@ -1094,6 +1192,7 @@
     // категорії та бюджет
     categories: categories, catById: catById, catUsage: catUsage, addCategory: addCategory, updateCategory: updateCategory, removeCategory: removeCategory, setBudget: setBudget, setCurrency: setCurrency,
     // витрати
+    cards: cards, cardById: cardById, cardTxs: cardTxs, cardDebt: cardDebt, cardsSummary: cardsSummary, cardMove: cardMove, setCardDebt: setCardDebt, addCard: addCard, updateCard: updateCard, removeCard: removeCard, MAX_CARDS: MAX_CARDS,
     addTx: addTx, updateTx: updateTx, setDeleted: setDeleted, restoreSnapshot: restoreSnapshot, monthTxs: monthTxs, monthKind: monthKind, monthFlow: monthFlow, incomeBySource: incomeBySource, normalizeCfg: normalizeCfg, cfgPayload: cfgPayload, subTotals: subTotals, subOf: subOf, subsOf: subsOf, addSub: addSub, renameSub: renameSub, ensureSub: ensureSub, removeSub: removeSub, subUsage: subUsage, MAX_SUBS: MAX_SUBS, FOOD_ID: FOOD_ID, allLive: allLive, kindOf: kindOf, catInfo: catInfo, resolveCat: resolveCat, INCOME_CATS: INCOME_CATS, catMonthTxs: catMonthTxs, catSeries: catSeries, groupByNote: groupByNote, spentByCategory: spentByCategory, byMember: byMember, dailySeries: dailySeries, monthsSeries: monthsSeries, members: members, sum: sum,
     monthBudget: monthBudget, overview: overview, setMonthBudget: setMonthBudget, setMemberLimit: setMemberLimit, monthSummary: monthSummary,
     // цілі, кредити, швидке додавання
@@ -1109,7 +1208,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v16', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v17', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

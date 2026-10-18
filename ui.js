@@ -37,7 +37,7 @@
     return cap(new Intl.DateTimeFormat('uk-UA', { weekday: 'long' }).format(d)) + ', ' + dm;
   }
   function dayMonthShort(date) { return new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long' }).format(F.dateFromStr(date)); }
-  function dotCls(c) { return c.colorIdx >= 0 ? ' c' + c.colorIdx : c.colorIdx === -2 ? ' inc' : c.colorIdx === -3 ? ' sav' : ''; }
+  function dotCls(c) { return c.colorIdx >= 0 ? ' c' + c.colorIdx : c.colorIdx === -4 ? ' card' : c.colorIdx === -2 ? ' inc' : c.colorIdx === -3 ? ' sav' : ''; }
   function catDot(c) { return '<i class="dot' + dotCls(c) + '" aria-hidden="true"></i>'; }
   function whole(n) { return money(Math.floor(n + 1e-9)); }
   function wholeUp(n) { return money(Math.ceil(n - 1e-9)); }
@@ -115,7 +115,7 @@
   function txRowHtml(t) {
     var c = F.catInfo(t); var sb = F.subOf(t); var cname = c.name + (sb ? ' · ' + sb.name : ''); var title = t.note || cname;
     var sub = (t.note ? cname + ', ' : '') + (t.member || '');
-    var amt = c.kind === 'income' ? signedMoney(t.amount) : c.kind === 'saving' ? (t.amount < 0 ? 'зняття ' + money(-t.amount) : signedMoney(t.amount)) : money(t.amount);
+    var amt = c.kind === 'income' ? signedMoney(t.amount) : c.kind === 'saving' ? (t.amount < 0 ? 'зняття ' + money(-t.amount) : signedMoney(t.amount)) : c.kind === 'card' ? (t.amount < 0 ? 'погасили ' + money(-t.amount) : 'взяли ' + money(t.amount)) : money(t.amount);
     return '<button class="txrow" data-act="edit" data-id="' + esc(t.id) + '">' + catDot(c) + '<span class="main"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></span><span class="amt num">' + esc(amt) + '</span></button>';
   }
 
@@ -173,6 +173,70 @@
     return '<section class="sec"><div class="sec-h"><h2>Кредити та картки</h2><button class="btn-text" data-act="loans">Керувати</button></div><div class="panel"><p class="lrow" style="padding:12px 0 2px"><span class="name"><b>Усього боргу</b></span><span class="lead"></span><span class="val num">' + money(sm.total) + '</span></p>' + loanRows() + '</div></section>';
   }
 
+  // --- Кредитки ---
+  function cardStatus(x) {
+    var parts = [];
+    if (x.debt > 0.005) parts.push(x.card.limit != null ? 'Доступно ' + money(Math.max(0, x.free)) + ' з ' + money(x.card.limit) : 'Ліміт не вказано');
+    else if (x.debt < -0.005) parts.push('Переплата ' + money(-x.debt));
+    else parts.push(x.card.limit != null ? 'Боргу немає, ліміт ' + money(x.card.limit) : 'Боргу немає');
+    if (x.last) parts.push((x.last.amount < 0 ? 'погасили ' : 'взяли ') + esc(dayMonthShort(x.last.date)));
+    return '<span class="status">' + parts.join(', ') + '</span>';
+  }
+  function cardMeter(x) {
+    if (x.card.limit == null || !(x.card.limit > 0)) return '';
+    var pct = Math.max(0, Math.min(100, Math.round(Math.max(0, x.debt) / x.card.limit * 100)));
+    return '<span class="meter' + (pct >= 90 ? ' over' : '') + '" role="img" aria-label="Використано ' + pct + '% ліміту"><i style="width:' + pct + '%"></i></span>';
+  }
+  function cardsSection() {
+    var sm = F.cardsSummary(); if (!sm.items.length) return '';
+    return '<section class="sec cards-sec"><div class="sec-h"><h2>Кредитки</h2><button class="btn-text" data-act="cards">Історія</button></div><div class="panel">' +
+      '<p class="lrow" style="padding:12px 0 2px"><span class="name"><b>Треба погасити</b></span><span class="lead"></span><span class="val num' + (sm.total > 0 ? ' badtxt' : '') + '">' + money(sm.total) + '</span></p><ul class="ledger">' +
+      sm.items.map(function (x) {
+        return '<li><div class="lrow"><span class="name"><i class="dot card" aria-hidden="true"></i><b>' + esc(x.card.name) + '</b></span><span class="lead"></span><span class="val num">' + money(Math.max(0, x.debt)) + '</span></div>' + cardMeter(x) + cardStatus(x) +
+          '<div class="acts"><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="1">' + ic('plus', 'sm') + 'Взяли</button>' +
+          (x.debt > 0.005 ? '<button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="-1">' + ic('check', 'sm') + 'Погасили</button>' : '') + '</div></li>';
+      }).join('') + '</ul></div></section>';
+  }
+  function cardHistory(id) {
+    var list = F.cardTxs(id).slice(0, 8); if (!list.length) return '<p class="note">Записів ще немає.</p>';
+    return '<ul class="ledger cardhist">' + list.map(function (t) {
+      return '<li><div class="lrow"><span class="name"><span class="hd">' + esc(dayMonthShort(t.date)) + '</span><b>' + esc(t.note || (t.amount < 0 ? 'Погасили' : 'Взяли')) + '</b></span><span class="lead"></span><span class="val num">' + (t.amount < 0 ? '−' : '+') + money(Math.abs(t.amount)) + '</span>' +
+        '<button class="iconbtn" data-act="card-tx-del" data-id="' + esc(t.id) + '" aria-label="Видалити запис від ' + esc(dayMonthShort(t.date)) + '">' + ic('trash', 'sm') + '</button></div>' + (t.member ? '<span class="status">' + esc(t.member) + '</span>' : '') + '</li>';
+    }).join('') + '</ul>';
+  }
+  function openCards(editId, keep) {
+    var sm = F.cardsSummary(); var e = editId ? F.cardById(editId) : null;
+    var html = sheetTop('Кредитки', 'Коли берете гроші з кредитки, натисніть «Взяли». Коли гасите із зарплати, натисніть «Погасили». Це не витрати й не доходи: змінюється лише борг, тому бюджет не рахується двічі.') +
+      (sm.items.length ? '<p class="lrow" style="padding:14px 0 0"><span class="name"><b>Треба погасити</b></span><span class="lead"></span><span class="val num">' + money(sm.total) + '</span></p>' + sm.items.map(function (x) {
+        return '<div class="rec-row"><div class="lrow"><span class="name"><i class="dot card" aria-hidden="true"></i><b>' + esc(x.card.name) + '</b></span><span class="lead"></span><span class="val num">' + money(Math.max(0, x.debt)) + '</span></div>' + cardMeter(x) + cardStatus(x) +
+          '<div class="acts wrap"><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="1">' + ic('plus', 'sm') + 'Взяли</button><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="-1">' + ic('check', 'sm') + 'Погасили</button><button class="btn alt sm" data-act="card-debt" data-id="' + esc(x.card.id) + '">Уточнити борг</button><button class="btn alt sm" data-act="card-edit" data-id="' + esc(x.card.id) + '">Змінити</button></div>' +
+          cardHistory(x.card.id) + '</div>';
+      }).join('') : '<p class="hint">Кредиток ще немає.</p>') +
+      '<form data-form="card" data-id="' + esc(editId || '') + '" novalidate><h3 style="margin-top:22px;font-size:16px">' + (e ? 'Змінити кредитку' : 'Додати кредитку') + '</h3>' +
+      '<div class="row2"><label class="field"><span>Чия або назва</span><input class="in" id="cc-name" maxlength="30" placeholder="Наприклад, Максим" value="' + esc(e ? e.name : '') + '"></label>' +
+      '<label class="field"><span>Кредитний ліміт, ' + esc(cur()) + '</span><input class="in" id="cc-limit" inputmode="decimal" placeholder="Необов’язково" value="' + (e && e.limit != null ? esc(String(e.limit).replace('.', ',')) : '') + '"></label></div>' +
+      '<p class="note bad" id="cc-err" role="alert" hidden></p>' +
+      '<button class="btn" type="submit">' + (e ? 'Зберегти зміни' : 'Додати кредитку') + '</button>' + (e ? '<button type="button" class="btn alt" data-act="card-cancel">Скасувати зміни</button><button type="button" class="btn danger" data-act="card-del" data-id="' + esc(e.id) + '">' + ic('trash', 'sm') + 'Видалити кредитку</button>' : '') + '</form>';
+    openSheet(html, { keepScroll: keep });
+  }
+  function openCardMove(id, sign) {
+    var cd = F.cardById(id); if (!cd) return; var debt = F.cardDebt(id);
+    var html = '<form data-form="card-move" data-id="' + esc(id) + '" data-s="' + sign + '" novalidate>' + sheetTop(sign > 0 ? 'Взяли з кредитки: ' + cd.name : 'Погасили кредитку: ' + cd.name, sign > 0 ? 'Борг зросте на цю суму. На що витратили, записуйте як звичайні витрати.' : 'Борг зменшиться. Це не витрата: гроші пішли на погашення.') +
+      '<div class="amount-wrap"><input class="amount-in" id="cm-amount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Сума"><span class="cur">' + esc(cur()) + '</span></div>' +
+      (sign < 0 && debt > 0.005 ? '<p class="note"><button type="button" class="btn-text" data-act="card-all" data-v="' + esc(String(debt).replace('.', ',')) + '">Увесь борг: ' + money(debt) + '</button></p>' : '') +
+      '<p class="note bad" id="cm-err" role="alert" hidden></p>' +
+      '<div class="row2"><label class="field"><span>Дата</span><input class="in" type="date" id="cm-date" value="' + esc(F.todayStr()) + '"></label><label class="field"><span>Нотатка</span><input class="in" id="cm-note" maxlength="200" placeholder="За бажанням"></label></div>' +
+      '<button class="btn" type="submit">' + (sign > 0 ? 'Записати: взяли' : 'Записати: погасили') + '</button></form>';
+    openSheet(html, { focus: '#cm-amount' });
+  }
+  function openCardDebt(id) {
+    var cd = F.cardById(id); if (!cd) return;
+    var html = '<form data-form="card-debt" data-id="' + esc(id) + '" novalidate>' + sheetTop('Уточнити борг: ' + cd.name, 'Введіть борг за випискою банку. Додаток запише різницю, щоб сума збіглася.') +
+      '<label class="field"><span>Борг зараз, ' + esc(cur()) + '</span><input class="in" id="cd-val" inputmode="decimal" value="' + esc(String(Math.max(0, F.cardDebt(id))).replace('.', ',')) + '"></label>' +
+      '<p class="note bad" id="cd-err" role="alert" hidden></p><button class="btn" type="submit">Зберегти</button></form>';
+    openSheet(html, { focus: '#cd-val' });
+  }
+
   function viewHome() {
     var today = F.todayStr(); var o = F.overview(today);
     var upcoming = F.upcomingRecurring(today).slice(0, 3);
@@ -180,7 +244,7 @@
     var h = top(cap(monthName(curYm))) + '<section class="hero" aria-live="polite">' + hero(o) + '</section>' + stripHtml();
     h += flowSection();
     h += '<section class="sec"><div class="sec-h"><h2>Категорії</h2><button class="btn-text" data-act="budget">Бюджет</button></div><div class="panel">' + budgetRows(o) + '</div></section>';
-    h += limitsSection();
+    h += limitsSection() + cardsSection();
     if (upcoming.length) {
       h += '<section class="sec"><div class="sec-h"><h2>Найближчі платежі</h2><button class="btn-text" data-act="recurring">Керувати</button></div><div class="panel"><ul class="ledger">' + upcoming.map(function (u) {
         return '<li><div class="lrow"><span class="name">' + catDot(F.catById(u.rec.category)) + '<b>' + esc(u.rec.name) + '</b></span><span class="lead"></span><span class="val num">' + money(u.rec.amount) + '</span></div><p class="status">' + esc(dayMonthShort(u.date)) + '</p></li>';
@@ -425,6 +489,7 @@
       '<li><button data-act="clubs"><span class="ico">' + ic('users') + '</span><span class="grow"><span class="t1">Гуртки дитини</span><span class="t2">' + (S.cfg.clubs.length ? S.cfg.clubs.length + ' ' + plural(S.cfg.clubs.length, 'гурток', 'гуртки', 'гуртків') + ' для швидкого вибору' : 'Футбол, англійська, танці…') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="goals"><span class="ico">' + ic('check') + '</span><span class="grow"><span class="t1">Цілі накопичень</span><span class="t2">' + (S.cfg.goals.length ? S.cfg.goals.length + ' ' + plural(S.cfg.goals.length, 'ціль', 'цілі', 'цілей') : 'Відпустка, резерв, велика покупка') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="loans"><span class="ico">' + ic('repeat') + '</span><span class="grow"><span class="t1">Кредити та картки</span><span class="t2">' + (S.cfg.loans.length ? 'Борг ' + money(F.loansSummary(F.todayStr()).total) : 'Залишок, дата закінчення, переплата') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
+      '<li><button data-act="cards"><span class="ico">' + ic('card') + '</span><span class="grow"><span class="t1">Кредитки</span><span class="t2">' + (F.cards().length ? (F.cardsSummary().total > 0 ? 'Треба погасити ' + money(F.cardsSummary().total) : 'Боргу немає') : 'Взяли з кредитки й погасили') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="ai"><span class="ico">' + ic('sparkle') + '</span><span class="grow"><span class="t1">ШІ-аналіз</span><span class="t2">Питання про ваші витрати</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="key"><span class="ico">' + ic('sparkle') + '</span><span class="grow"><span class="t1">Розпізнавання чеків</span><span class="t2">' + ({ own: 'Ключ Gemini додано', nutriplan: 'Використовується ключ з NutriPlan', none: 'Потрібен ключ Gemini' }[F.keySource()]) + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="pin"><span class="ico">' + ic('users') + '</span><span class="grow"><span class="t1">PIN-код</span><span class="t2">' + (F.hasPin() ? 'Увімкнено на цьому телефоні' : 'Закрити додаток від сторонніх') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
@@ -567,7 +632,10 @@
       closeSheet(); render(); refreshList(); toast('Зміни збережено', 'Скасувати', function () { F.restoreSnapshot(r.before); render(); });
     } else {
       var a = F.addTx(p); if (a.error) return showErr('tx-err', a.error);
-      closeSheet(); render(); toast(label(a.tx), 'Скасувати', function () { F.setDeleted(a.tx.id, true); render(); });
+      closeSheet(); render();
+      var debt = F.cardsSummary().total;
+      if ((a.tx.category === 'in_salary' || a.tx.category === 'in_advance') && debt > 0.005) toast(label(a.tx) + '. На кредитках борг ' + money(debt), 'Погасити', function () { openCards(); }, 9000);
+      else toast(label(a.tx), 'Скасувати', function () { F.setDeleted(a.tx.id, true); render(); });
     }
   }
   // ---------- Чек по позиціях ----------
@@ -995,6 +1063,14 @@
     'goal-cancel': function () { openGoals(null, true); },
     'goal-del': function (el) { if (confirm('Видалити ціль? Уже записані внески лишаться в історії.')) { F.removeGoal(attr(el, 'id')); openGoals(null, true); render(); } },
     'goal-move': function (el) { openGoalMove(attr(el, 'id'), Number(attr(el, 's'))); },
+    cards: function () { openCards(); },
+    'card-move': function (el) { openCardMove(attr(el, 'id'), Number(attr(el, 's'))); },
+    'card-debt': function (el) { openCardDebt(attr(el, 'id')); },
+    'card-edit': function (el) { openCards(attr(el, 'id'), false); var f = $('#cc-name'); if (f) { if (f.scrollIntoView) f.scrollIntoView({ block: 'center' }); f.focus(); } },
+    'card-cancel': function () { openCards(null, true); },
+    'card-del': function (el) { var r = F.removeCard(attr(el, 'id')); if (r.error) return showErr('cc-err', r.error); openCards(null, true); render(); toast('Кредитку видалено'); },
+    'card-all': function (el) { var a = $('#cm-amount'); if (a) { a.value = attr(el, 'v'); a.focus(); } },
+    'card-tx-del': function (el) { var tid = attr(el, 'id'); F.setDeleted(tid, true); openCards(null, true); render(); toast('Запис видалено', 'Повернути', function () { F.setDeleted(tid, false); if ($('.sheet')) openCards(null, true); render(); }); },
     loans: function () { openLoans(); },
     'loan-edit': function (el) { openLoans(attr(el, 'id'), false); var f = $('#l-name'); if (f) f.focus(); },
     'loan-cancel': function () { openLoans(null, true); },
@@ -1096,6 +1172,19 @@
       if (!lid) lp.auto = $('#l-auto').checked;
       var lr = lid ? F.updateLoan(lid, lp) : F.addLoan(lp); if (lr.error) return showErr('l-err', lr.error);
       openLoans(null, false); render(); toast(lid ? 'Збережено' : 'Додано');
+    } else if (kind === 'card') {
+      var cid0 = attr(form, 'id'); var cp = { name: $('#cc-name').value, limit: $('#cc-limit').value };
+      var cr = cid0 ? F.updateCard(cid0, cp) : F.addCard(cp); if (cr.error) return showErr('cc-err', cr.error);
+      openCards(null, false); render(); toast(cid0 ? 'Збережено' : 'Кредитку додано');
+    } else if (kind === 'card-move') {
+      var kid = attr(form, 'id'); var ks = Number(attr(form, 's')); var kamt = F.parseAmount($('#cm-amount').value);
+      if (kamt == null) return showErr('cm-err', 'Введіть суму більше нуля.');
+      var kr = F.cardMove(kid, ks, kamt, $('#cm-date').value, $('#cm-note').value); if (kr.error) return showErr('cm-err', kr.error);
+      closeSheet(); render(); var left = F.cardDebt(kid);
+      toast(ks > 0 ? 'Записано: взяли ' + money(kamt) + '. Борг ' + money(Math.max(0, left)) : (left > 0.005 ? 'Погашено ' + money(kamt) + '. Лишилось ' + money(left) : 'Кредитку погашено повністю'), 'Скасувати', function () { F.setDeleted(kr.tx.id, true); render(); });
+    } else if (kind === 'card-debt') {
+      var dr = F.setCardDebt(attr(form, 'id'), $('#cd-val').value); if (dr.error) return showErr('cd-err', dr.error);
+      openCards(null, false); render(); toast(dr.same ? 'Борг і так такий' : 'Борг уточнено');
     } else if (kind === 'loan-bal') {
       var br = F.updateLoan(attr(form, 'id'), { balance: $('#lb-val').value }); if (br.error) return showErr('lb-err', br.error);
       openLoans(null, false); render(); toast('Залишок оновлено');

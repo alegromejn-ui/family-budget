@@ -7,7 +7,7 @@
 :root {
   --paper: #EDF1EE; --sheet: #FFFFFF; --ink: #0F1D19; --ink2: #50605A; --line: #D3DBD7; --wash: #E3E9E5;
   --accent: #0F4D3F; --on-accent: #FFFFFF; --warn: #A8321F; --warn-wash: #FBE9E5; --bar: #9DB0A8;
-  --c0: #0072B2; --c1: #E69F00; --c2: #009E73; --c3: #CC79A7; --c4: #D55E00; --c5: #56B4E9; --c6: #6C5CC9; --c7: #7A8F1C; --c8: #8B5E3C; --c9: #5C7A99; --cn: #8A9993;
+  --c0: #0072B2; --c1: #E69F00; --c2: #009E73; --c3: #CC79A7; --c4: #D55E00; --c5: #56B4E9; --c6: #6C5CC9; --c7: #7A8F1C; --c8: #8B5E3C; --c9: #5C7A99; --c10: #B8336A; --c11: #3F7F7A; --cn: #8A9993;
   --r: 14px; --nav-h: 64px;
   color-scheme: light;
 }
@@ -15,7 +15,7 @@
   :root {
     --paper: #0B1310; --sheet: #151F1B; --ink: #E7EFEB; --ink2: #A3B3AC; --line: #2A3833; --wash: #1D2925;
     --accent: #4FD1A8; --on-accent: #06231B; --warn: #FF9C8A; --warn-wash: #3A1D18; --bar: #51645C;
-    --c0: #4DA3E0; --c1: #F0B429; --c2: #2FC79A; --c3: #E096BF; --c4: #F0813F; --c5: #7CC5F0; --c6: #9C8CF0; --c7: #B5C93A; --c8: #C4916A; --c9: #8FA9C4; --cn: #7B8B85;
+    --c0: #4DA3E0; --c1: #F0B429; --c2: #2FC79A; --c3: #E096BF; --c4: #F0813F; --c5: #7CC5F0; --c6: #9C8CF0; --c7: #B5C93A; --c8: #C4916A; --c9: #8FA9C4; --c10: #F07AA8; --c11: #6FC2BA; --cn: #7B8B85;
     color-scheme: dark;
   }
 }
@@ -293,3 +293,20 @@ section + .btn { margin-top: 26px; }
 .sub-edit { grid-template-columns: 1fr auto; }
 .edit-row .subline { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 10px; background: var(--wash); color: var(--ink2); font-size: 13px; text-align: left; }
 .edit-row .subline span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* v17: одяг, кредитки */
+.dot.c10 { background: var(--c10); } .dot.c11 { background: var(--c11); }
+.hbar .track i.c10 { background: var(--c10); } .hbar .track i.c11 { background: var(--c11); }
+.dot.card { background: transparent; border: 2.5px solid var(--warn); border-radius: 3px; }
+.cards-sec .ledger > li .acts, .rec-row .acts.wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cardhist { margin-top: 10px; }
+.cardhist > li { padding: 8px 0; }
+.cardhist .lrow { align-items: center; }
+.cardhist .name { font-size: 14px; }
+.cardhist .name b { font-weight: 500; }
+.cardhist .hd { color: var(--ink2); font-size: 13px; flex: none; min-width: 64px; }
+.cardhist .val { font-size: 14px; }
+.iconbtn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: var(--ink2); flex: none; }
+.iconbtn:active { background: var(--wash); }
+.cardhist > li { padding: 6px 0; }
+.cardhist .status { margin-top: 0; font-size: 12px; }

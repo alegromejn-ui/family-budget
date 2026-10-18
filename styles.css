@@ -310,3 +310,127 @@ section + .btn { margin-top: 26px; }
 .iconbtn:active { background: var(--wash); }
 .cardhist > li { padding: 6px 0; }
 .cardhist .status { margin-top: 0; font-size: 12px; }
+
+/* ================= v17: оновлений вигляд ================= */
+:root {
+  --paper: #EEF2EF; --wash: #E6ECE8; --line: #DDE4E0;
+  --r: 20px;
+  --shadow: 0 1px 2px rgba(15,29,25,.05), 0 6px 20px -6px rgba(15,29,25,.10);
+  --accent-wash: #DCEFE7;
+  --hero-a: #0F4D3F; --hero-b: #1F7259; --hero-bad-a: #8B2A1C; --hero-bad-b: #B9472F;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0A110E; --sheet: #141D19; --wash: #1C2723; --line: #26332E;
+    --shadow: 0 0 0 1px #1F2B26;
+    --accent-wash: #173A30;
+    --hero-a: #134236; --hero-b: #1B5C49; --hero-bad-a: #4C1D15; --hero-bad-b: #6E2A1E;
+  }
+}
+
+/* Верх */
+.top { padding: 10px 0 16px; }
+.top h1 { font-size: 28px; font-weight: 800; letter-spacing: -.025em; }
+.pill { min-height: 32px; font-size: 12.5px; background: var(--sheet); box-shadow: var(--shadow); }
+
+/* Головна картка */
+.hero-card { position: relative; overflow: hidden; border-radius: 26px; padding: 20px 20px 12px; color: #fff;
+  background: radial-gradient(120% 90% at 100% 0%, rgba(255,255,255,.16), transparent 55%), linear-gradient(150deg, var(--hero-a), var(--hero-b));
+  box-shadow: 0 14px 30px -14px rgba(15,77,63,.55); }
+.hero-card.bad { background: radial-gradient(120% 90% at 100% 0%, rgba(255,255,255,.14), transparent 55%), linear-gradient(150deg, var(--hero-bad-a), var(--hero-bad-b)); box-shadow: 0 14px 30px -14px rgba(139,42,28,.55); }
+.hero-card .hero { padding: 0; }
+.hero-card .hero-line, .hero-card .hero-line.bad { color: #fff; font-size: 17px; font-weight: 500; line-height: 1.3; opacity: .95; }
+.hero-card .hero-line .amt { font-size: 42px; font-weight: 800; letter-spacing: -.035em; margin-top: 6px; opacity: 1; }
+.hero-card .hero-line.bad .ic { width: 20px; height: 20px; vertical-align: -4px; }
+.hero-card .hero-sub { color: rgba(255,255,255,.78); font-size: 14px; max-width: none; }
+.hero-card .btn-text { color: #fff; background: rgba(255,255,255,.16); border-radius: 12px; padding: 0 14px; min-height: 40px; margin-top: 12px; }
+.hero-card .status { color: rgba(255,255,255,.85); }
+.hero-meter { height: 8px; border-radius: 4px; background: rgba(255,255,255,.2); margin-top: 16px; overflow: hidden; }
+.hero-meter i { display: block; height: 100%; border-radius: 4px; background: #fff; }
+.hero-card.bad .hero-meter i { background: #FFD3C9; }
+.hero-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: rgba(255,255,255,.75); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.hero-card .strip { margin: 14px -2px 0; }
+.hero-card .strip svg { height: 44px; }
+.hero-card .strip rect.bar { fill: rgba(255,255,255,.42); }
+.hero-card .strip rect.today { fill: #fff; }
+.hero-card .strip rect.sel { fill: #FFE08A; }
+.hero-card .strip rect.zero { fill: rgba(255,255,255,.16); }
+.hero-card .strip .read { color: rgba(255,255,255,.75); font-size: 12.5px; }
+
+/* Розділи й панелі */
+.sec { margin-top: 28px; }
+.sec-h { margin-bottom: 10px; padding: 0 2px; }
+.sec-h h2 { font-size: 19px; font-weight: 750; letter-spacing: -.01em; }
+.sec-h .btn-text { font-size: 14px; background: var(--accent-wash); border-radius: 10px; padding: 0 10px; }
+.panel { border-radius: var(--r); padding: 6px 16px; box-shadow: var(--shadow); }
+.lrow { align-items: center; }
+.lrow .lead { border-bottom: 0; transform: none; }
+.lrow .name { gap: 12px; }
+.ledger > li { padding: 13px 0; }
+.ledger > li + li { border-top-color: var(--wash); }
+
+/* Значки категорій */
+.cico { --cc: var(--cn); width: 34px; height: 34px; border-radius: 11px; flex: none; display: inline-grid; place-items: center; color: var(--cc); background: color-mix(in srgb, var(--cc) 15%, var(--sheet)); font-style: normal; }
+.cico .ic { width: 19px; height: 19px; stroke-width: 2.1; }
+.cico b { font-size: 15px; font-weight: 700; }
+.cico.c0 { --cc: var(--c0); } .cico.c1 { --cc: var(--c1); } .cico.c2 { --cc: var(--c2); } .cico.c3 { --cc: var(--c3); } .cico.c4 { --cc: var(--c4); } .cico.c5 { --cc: var(--c5); }
+.cico.c6 { --cc: var(--c6); } .cico.c7 { --cc: var(--c7); } .cico.c8 { --cc: var(--c8); } .cico.c9 { --cc: var(--c9); } .cico.c10 { --cc: var(--c10); } .cico.c11 { --cc: var(--c11); }
+.cico.inc { --cc: var(--accent); } .cico.sav { --cc: var(--c6); } .cico.card { --cc: var(--warn); }
+.txrow .cico { width: 42px; height: 42px; border-radius: 14px; }
+.txrow .cico .ic { width: 21px; height: 21px; }
+.chip .cico, .catgrid .cico, .quick .cico { width: 24px; height: 24px; border-radius: 8px; margin-left: -6px; }
+.chip .cico .ic, .catgrid .cico .ic, .quick .cico .ic { width: 15px; height: 15px; }
+.chip .cico b, .catgrid .cico b { font-size: 12px; }
+.meter { height: 7px; border-radius: 4px; }
+.meter i { background: var(--accent); }
+.meter i.c0 { background: var(--c0); } .meter i.c1 { background: var(--c1); } .meter i.c2 { background: var(--c2); } .meter i.c3 { background: var(--c3); } .meter i.c4 { background: var(--c4); } .meter i.c5 { background: var(--c5); }
+.meter i.c6 { background: var(--c6); } .meter i.c7 { background: var(--c7); } .meter i.c8 { background: var(--c8); } .meter i.c9 { background: var(--c9); } .meter i.c10 { background: var(--c10); } .meter i.c11 { background: var(--c11); }
+.meter.over i { background: var(--warn); }
+.catlink .lrow + .meter, .catlink .meter { margin-left: 46px; }
+.catlink .status, li > .status { padding-left: 0; }
+.catlink .status { margin-left: 46px; }
+
+/* Баланс місяця: плитки */
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi { background: var(--sheet); border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
+.kpi > span { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink2); }
+.kpi > b { display: block; font-size: 20px; font-weight: 750; letter-spacing: -.02em; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; }
+.kpi.big { grid-column: 1 / -1; }
+.kpi.big > b { font-size: 30px; }
+.kpi.neg > b { color: var(--warn); }
+.kpi.in > span .ic { color: var(--accent); } .kpi.out > span .ic { color: var(--warn); }
+
+/* Список витрат */
+.txrow { gap: 13px; min-height: 62px; }
+.txrow + .txrow { border-top-color: var(--wash); }
+.txrow .main b { font-weight: 600; }
+.day-h { padding: 20px 4px 8px; }
+.chip { background: var(--sheet); box-shadow: var(--shadow); border: 1.5px solid transparent; }
+.chip[aria-pressed="true"], .chip.on { border-color: var(--accent); background: var(--accent-wash); color: var(--ink); }
+.quick .chip { box-shadow: none; }
+.seg { background: var(--wash); border-radius: 14px; padding: 4px; }
+.seg button { border-radius: 11px; }
+.seg button[aria-pressed="true"] { box-shadow: var(--shadow); }
+.in { border-radius: 14px; }
+.in.search { box-shadow: var(--shadow); border-color: transparent; }
+
+/* Форма витрати */
+.amount-wrap { border-bottom: 0; background: var(--paper); border-radius: 18px; padding: 4px 16px; }
+.amount-wrap:focus-within { box-shadow: 0 0 0 2px var(--accent); }
+.amount-in { font-size: 44px; }
+.catgrid label { background: var(--paper); border: 1.5px solid transparent; padding: 0 14px 0 12px; gap: 9px; min-height: 44px; }
+.catgrid input:checked + label { border-color: var(--accent); background: var(--accent-wash); }
+.btn { border-radius: 16px; box-shadow: 0 8px 18px -10px rgba(15,77,63,.6); }
+.btn.alt, .btn.danger { box-shadow: none; }
+.sheet { border-radius: 28px 28px 0 0; }
+
+/* «Ще» */
+.menu .ico { background: var(--accent-wash); color: var(--accent); border-radius: 12px; }
+
+/* Нижня панель */
+#tabs { border-top: 0; box-shadow: 0 -1px 0 var(--line), 0 -10px 30px -18px rgba(15,29,25,.25); }
+#tabs button.tab[aria-current="page"] { color: var(--accent); }
+#tabs button.tab .ic { padding: 3px 14px; width: 52px; height: 28px; border-radius: 14px; box-sizing: border-box; }
+#tabs button.tab[aria-current="page"] .ic { background: var(--accent-wash); }
+#tabs .fab { background: linear-gradient(150deg, var(--hero-a), var(--hero-b)); color: #fff; box-shadow: 0 10px 22px -8px rgba(15,77,63,.6); }
+@media (prefers-color-scheme: dark) { #tabs .fab { background: var(--accent); color: var(--on-accent); } }

@@ -38,7 +38,13 @@
   }
   function dayMonthShort(date) { return new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long' }).format(F.dateFromStr(date)); }
   function dotCls(c) { return c.colorIdx >= 0 ? ' c' + c.colorIdx : c.colorIdx === -4 ? ' card' : c.colorIdx === -2 ? ' inc' : c.colorIdx === -3 ? ' sav' : ''; }
-  function catDot(c) { return '<i class="dot' + dotCls(c) + '" aria-hidden="true"></i>'; }
+  // Значок категорії: кольорова плашка з піктограмою (власні категорії — перша літера)
+  var CAT_ICONS = { food: 1, cafe: 1, transport: 1, home: 1, household: 1, loans: 1, cards: 1, health: 1, kids: 1, fun: 1, clothes: 1, other: 1 };
+  function catDot(c) {
+    var k = c.colorIdx === -2 ? 'in' : c.colorIdx === -3 ? 'sav' : c.colorIdx === -4 ? 'cards' : CAT_ICONS[c.id] ? c.id : '';
+    var inner = k ? '<svg class="ic"><use href="#ci-' + k + '"/></svg>' : '<b>' + esc(String(c.name || '?').trim().charAt(0).toUpperCase() || '?') + '</b>';
+    return '<i class="cico' + dotCls(c) + '" aria-hidden="true">' + inner + '</i>';
+  }
   function whole(n) { return money(Math.floor(n + 1e-9)); }
   function wholeUp(n) { return money(Math.ceil(n - 1e-9)); }
   function monthGen(m) { return new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long' }).format(F.dateFromStr(m + '-01')).replace(/^\d+\s*/, '') + ' ' + m.slice(0, 4); }
@@ -105,7 +111,7 @@
       var extra = '';
       if (lim) {
         var over = s > lim; var pct = Math.min(100, Math.round(s / lim * 100));
-        extra = '<span class="meter' + (over ? ' over' : '') + '" role="img" aria-label="Витрачено ' + pct + '% ліміту"><i style="width:' + pct + '%"></i></span>' +
+        extra = '<span class="meter' + (over ? ' over' : '') + '" role="img" aria-label="Витрачено ' + pct + '% ліміту"><i class="' + (c.colorIdx >= 0 ? 'c' + c.colorIdx : '') + '" style="width:' + pct + '%"></i></span>' +
           (over ? '<span class="status bad">' + ic('alert', 'sm') + 'Перевищено на ' + money(s - lim) + '</span>' : '<span class="status">Лишилось ' + money(lim - s) + '</span>');
       }
       return '<li><button class="catlink" data-act="open-cat" data-c="' + esc(c.id) + '"><span class="lrow"><span class="name">' + catDot(c) + '<b>' + esc(c.name) + '</b></span><span class="lead"></span>' + val + ic('right', 'sm chev') + '</span>' + extra + '</button></li>';
@@ -125,9 +131,10 @@
     var src = F.incomeBySource(curYm);
     var incomeParts = src.length > 1 ? src.map(function (x) { return '<li class="subli"><span class="lrow sub"><span class="name">' + esc(x.name) + (x.count > 1 ? ' · ' + x.count + ' надходж.' : '') + '</span><span class="lead"></span><span class="val num">' + signedMoney(x.total) + '</span></span></li>'; }).join('') : '';
     var row = function (name, val, cls) { return '<li><span class="lrow"><span class="name"><b>' + name + '</b></span><span class="lead"></span><span class="val num' + (cls || '') + '">' + val + '</span></span></li>'; };
-    return '<section class="sec"><div class="sec-h"><h2>Баланс місяця</h2><button class="btn-text" data-act="list-kind" data-k="income">Доходи</button></div><div class="panel"><ul class="ledger">' +
-      row('Доходи', signedMoney(f.income)) + incomeParts + row('Витрати', money(f.spent)) + (f.saved !== 0 ? row('Відкладено', money(f.saved)) : '') +
-      '<li><span class="lrow"><span class="name"><b>Залишок</b></span><span class="lead"></span><span class="val num' + (f.balance < 0 ? ' badtxt' : '') + '">' + money(f.balance) + '</span></span>' + (f.balance < 0 ? '<span class="status bad">' + ic('alert', 'sm') + 'Витрати та накопичення перевищили доходи</span>' : '') + '</li></ul></div></section>';
+    return '<section class="sec"><div class="sec-h"><h2>Баланс місяця</h2><button class="btn-text" data-act="list-kind" data-k="income">Доходи</button></div>' +
+      '<div class="kpis"><div class="kpi big' + (f.balance < 0 ? ' neg' : '') + '"><span>Залишок</span><b class="num">' + money(f.balance) + '</b>' + (f.balance < 0 ? '<span class="status bad">' + ic('alert', 'sm') + 'Витрати та накопичення перевищили доходи</span>' : '') + '</div>' +
+      '<div class="kpi in"><span>' + ic('in', 'sm') + 'Доходи</span><b class="num">' + signedMoney(f.income) + '</b></div><div class="kpi out"><span>' + ic('out', 'sm') + 'Витрати</span><b class="num">' + money(f.spent) + '</b></div></div>' +
+      (incomeParts || f.saved !== 0 ? '<div class="panel" style="margin-top:10px"><ul class="ledger">' + (incomeParts ? row('Доходи за джерелами', signedMoney(f.income)) + incomeParts : '') + (f.saved !== 0 ? row('Відкладено', money(f.saved)) : '') + '</ul></div>' : '') + '</section>';
   }
   function limitsSection() {
     var lim = F.state.cfg.memberLimits; var names = Object.keys(lim); if (!names.length) return '';
@@ -147,7 +154,7 @@
     var today = F.todayStr();
     return '<ul class="ledger">' + F.state.cfg.goals.slice(0, max || 99).map(function (g) {
       var i = F.goalInfo(g, today);
-      return '<li><button class="catlink" data-act="goals"><span class="lrow"><span class="name"><i class="dot sav" aria-hidden="true"></i><b>' + esc(g.name) + '</b></span><span class="lead"></span><span class="val num">' + money(i.saved, true) + ' <small>із ' + money(g.target) + '</small></span>' + ic('right', 'sm chev') + '</span><span class="meter" role="img" aria-label="Зібрано ' + i.pct + '%"><i style="width:' + i.pct + '%"></i></span>' + goalStatus(i) + '</button></li>';
+      return '<li><button class="catlink" data-act="goals"><span class="lrow"><span class="name"><i class="cico sav" aria-hidden="true"><svg class="ic"><use href="#ci-sav"/></svg></i><b>' + esc(g.name) + '</b></span><span class="lead"></span><span class="val num">' + money(i.saved, true) + ' <small>із ' + money(g.target) + '</small></span>' + ic('right', 'sm chev') + '</span><span class="meter" role="img" aria-label="Зібрано ' + i.pct + '%"><i style="width:' + i.pct + '%"></i></span>' + goalStatus(i) + '</button></li>';
     }).join('') + '</ul>';
   }
   function goalsSection() {
@@ -192,7 +199,7 @@
     return '<section class="sec cards-sec"><div class="sec-h"><h2>Кредитки</h2><button class="btn-text" data-act="cards">Історія</button></div><div class="panel">' +
       '<p class="lrow" style="padding:12px 0 2px"><span class="name"><b>Треба погасити</b></span><span class="lead"></span><span class="val num' + (sm.total > 0 ? ' badtxt' : '') + '">' + money(sm.total) + '</span></p><ul class="ledger">' +
       sm.items.map(function (x) {
-        return '<li><div class="lrow"><span class="name"><i class="dot card" aria-hidden="true"></i><b>' + esc(x.card.name) + '</b></span><span class="lead"></span><span class="val num">' + money(Math.max(0, x.debt)) + '</span></div>' + cardMeter(x) + cardStatus(x) +
+        return '<li><div class="lrow"><span class="name"><i class="cico card" aria-hidden="true"><svg class="ic"><use href="#ci-cards"/></svg></i><b>' + esc(x.card.name) + '</b></span><span class="lead"></span><span class="val num">' + money(Math.max(0, x.debt)) + '</span></div>' + cardMeter(x) + cardStatus(x) +
           '<div class="acts"><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="1">' + ic('plus', 'sm') + 'Взяли</button>' +
           (x.debt > 0.005 ? '<button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="-1">' + ic('check', 'sm') + 'Погасили</button>' : '') + '</div></li>';
       }).join('') + '</ul></div></section>';
@@ -208,7 +215,7 @@
     var sm = F.cardsSummary(); var e = editId ? F.cardById(editId) : null;
     var html = sheetTop('Кредитки', 'Коли берете гроші з кредитки, натисніть «Взяли». Коли гасите із зарплати, натисніть «Погасили». Це не витрати й не доходи: змінюється лише борг, тому бюджет не рахується двічі.') +
       (sm.items.length ? '<p class="lrow" style="padding:14px 0 0"><span class="name"><b>Треба погасити</b></span><span class="lead"></span><span class="val num">' + money(sm.total) + '</span></p>' + sm.items.map(function (x) {
-        return '<div class="rec-row"><div class="lrow"><span class="name"><i class="dot card" aria-hidden="true"></i><b>' + esc(x.card.name) + '</b></span><span class="lead"></span><span class="val num">' + money(Math.max(0, x.debt)) + '</span></div>' + cardMeter(x) + cardStatus(x) +
+        return '<div class="rec-row"><div class="lrow"><span class="name"><i class="cico card" aria-hidden="true"><svg class="ic"><use href="#ci-cards"/></svg></i><b>' + esc(x.card.name) + '</b></span><span class="lead"></span><span class="val num">' + money(Math.max(0, x.debt)) + '</span></div>' + cardMeter(x) + cardStatus(x) +
           '<div class="acts wrap"><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="1">' + ic('plus', 'sm') + 'Взяли</button><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="-1">' + ic('check', 'sm') + 'Погасили</button><button class="btn alt sm" data-act="card-debt" data-id="' + esc(x.card.id) + '">Уточнити борг</button><button class="btn alt sm" data-act="card-edit" data-id="' + esc(x.card.id) + '">Змінити</button></div>' +
           cardHistory(x.card.id) + '</div>';
       }).join('') : '<p class="hint">Кредиток ще немає.</p>') +
@@ -241,7 +248,10 @@
     var today = F.todayStr(); var o = F.overview(today);
     var upcoming = F.upcomingRecurring(today).slice(0, 3);
     var recent = F.monthTxs(curYm).slice(0, 5);
-    var h = top(cap(monthName(curYm))) + '<section class="hero" aria-live="polite">' + hero(o) + '</section>' + stripHtml();
+    var bad = liveCount() && o.budget && (o.over || o.leftToday < 0);
+    var pct = o.budget ? Math.min(100, Math.round(o.spent / o.budget * 100)) : 0;
+    var meter = liveCount() && o.budget ? '<div class="hero-meter" role="img" aria-label="Витрачено ' + pct + '% бюджету"><i style="width:' + pct + '%"></i></div><p class="hero-meta"><span>' + money(o.spent) + ' витрачено</span><span>бюджет ' + money(o.budget) + '</span></p>' : '';
+    var h = top(cap(monthName(curYm))) + '<div class="hero-card' + (bad ? ' bad' : '') + '"><section class="hero" aria-live="polite">' + hero(o) + '</section>' + meter + stripHtml() + '</div>';
     h += flowSection();
     h += '<section class="sec"><div class="sec-h"><h2>Категорії</h2><button class="btn-text" data-act="budget">Бюджет</button></div><div class="panel">' + budgetRows(o) + '</div></section>';
     h += limitsSection() + cardsSection();
@@ -585,10 +595,10 @@
   }
   function catGridHtml(kind, selId, t) {
     var items;
-    if (kind === 'income') items = F.INCOME_CATS.map(function (c) { return { id: c.id, name: c.name, dot: '<i class="dot inc" aria-hidden="true"></i>' }; });
+    if (kind === 'income') items = F.INCOME_CATS.map(function (c) { return { id: c.id, name: c.name, dot: '<i class="cico inc" aria-hidden="true"><svg class="ic"><use href="#ci-in"/></svg></i>' }; });
     else if (kind === 'saving') {
-      items = F.state.cfg.goals.map(function (g) { return { id: 'sv_' + g.id, name: g.name, dot: '<i class="dot sav" aria-hidden="true"></i>' }; });
-      if (t && !items.some(function (c) { return c.id === t.category; })) items.push({ id: t.category, name: t.cn || 'Видалена ціль', dot: '<i class="dot sav" aria-hidden="true"></i>' });
+      items = F.state.cfg.goals.map(function (g) { return { id: 'sv_' + g.id, name: g.name, dot: '<i class="cico sav" aria-hidden="true"><svg class="ic"><use href="#ci-sav"/></svg></i>' }; });
+      if (t && !items.some(function (c) { return c.id === t.category; })) items.push({ id: t.category, name: t.cn || 'Видалена ціль', dot: '<i class="cico sav" aria-hidden="true"><svg class="ic"><use href="#ci-sav"/></svg></i>' });
     } else items = F.categories().map(function (c) { return { id: c.id, name: c.name, dot: catDot(c) }; });
     if (!items.length) return '<p class="hint">Спершу створіть ціль у «Ще».</p>';
     if (!items.some(function (c) { return c.id === selId; })) selId = kind === 'expense' ? 'other' : items[0].id;
@@ -779,7 +789,7 @@
     var html = sheetTop('Цілі накопичень', 'Відкладайте гроші на відпустку, резерв чи велику покупку. Внески бачить уся родина.') +
       (cfg.goals.length ? cfg.goals.map(function (g) {
         var i = F.goalInfo(g, today);
-        return '<div class="rec-row"><div class="lrow"><span class="name"><i class="dot sav" aria-hidden="true"></i><b>' + esc(g.name) + '</b></span><span class="lead"></span><span class="val num">' + money(i.saved, true) + ' <small>із ' + money(g.target) + '</small></span></div><span class="meter" role="img" aria-label="Зібрано ' + i.pct + '%" style="margin-top:8px"><i style="width:' + i.pct + '%"></i></span>' + goalStatus(i) +
+        return '<div class="rec-row"><div class="lrow"><span class="name"><i class="cico sav" aria-hidden="true"><svg class="ic"><use href="#ci-sav"/></svg></i><b>' + esc(g.name) + '</b></span><span class="lead"></span><span class="val num">' + money(i.saved, true) + ' <small>із ' + money(g.target) + '</small></span></div><span class="meter" role="img" aria-label="Зібрано ' + i.pct + '%" style="margin-top:8px"><i style="width:' + i.pct + '%"></i></span>' + goalStatus(i) +
           '<div class="acts"><button class="btn alt sm" data-act="goal-move" data-id="' + esc(g.id) + '" data-s="1">' + ic('plus', 'sm') + 'Внесок</button><button class="btn alt sm" data-act="goal-move" data-id="' + esc(g.id) + '" data-s="-1">Зняти</button><button class="btn alt sm" data-act="goal-edit" data-id="' + esc(g.id) + '">Змінити</button></div></div>';
       }).join('') : '<p class="hint">Цілей ще немає.</p>') +
       '<form data-form="goal" data-id="' + esc(editId || '') + '" novalidate><h3 style="margin-top:22px;font-size:16px">' + (e ? 'Змінити ціль' : 'Нова ціль') + '</h3>' +

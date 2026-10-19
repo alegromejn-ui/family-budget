@@ -1,12 +1,12 @@
 /* Сервісний воркер: додаток відкривається без інтернету.
    Сторінка береться з мережі (щоб оновлення приходили), а коли мережі немає, з кешу.
    Запити до таблиці й до Gemini сюди не потрапляють: вони йдуть на інші адреси. */
-const VERSION = 'family-budget-v18';
+const VERSION = 'family-budget-v19';
 const SHELL = ['./', 'index.html', 'styles.css', 'core.js', 'ui.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -17,12 +17,34 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then(res => { const copy = res.clone(); caches.open(VERSION).then(c => c.put('index.html', copy)); return res; })
-      .catch(() => caches.match('index.html').then(r => r || caches.match('./'))));
+    e.respondWith(navigate(req));
     return;
   }
   e.respondWith(caches.match(req).then(hit => {
-    const net = fetch(req).then(res => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return res; }).catch(() => hit);
+    const net = fetch(req, { cache: 'no-cache' }).then(res => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return res; }).catch(() => hit);
     return hit || net;
   }));
 });
+
+// Відкриття сторінки: інтернет чекаємо максимум 3 с, далі збережена копія (а свіжа підтягнеться фоном).
+// Так додаток відкривається і без мережі, і за дуже слабкого зв’язку, коли запит «висить».
+const NAV_WAIT = 3000;
+function offlinePage() {
+  return new Response('<!doctype html><html lang="uk"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Немає зв’язку</title>' +
+    '<body style="font:16px/1.5 system-ui,sans-serif;background:#111;color:#eee;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;text-align:center">' +
+    '<div><h1 style="font-size:20px">Немає зв’язку</h1><p>Додаток ще не встиг зберегтися в телефоні. Підключіться до інтернету й відкрийте його ще раз.</p>' +
+    '<p><button onclick="location.reload()" style="font:inherit;padding:10px 18px;border-radius:12px;border:0">Спробувати ще раз</button></p></div></body></html>',
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+function navigate(req) {
+  const cached = () => caches.match('index.html', { ignoreSearch: true }).then(r => r || caches.match('./', { ignoreSearch: true }));
+  const net = fetch(req, { cache: 'no-cache' }).then(res => {
+    if (res && res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put('index.html', copy)); }
+    return res;
+  });
+  const quick = Promise.race([net.catch(() => null), new Promise(r => setTimeout(() => r(null), NAV_WAIT))]);
+  return quick.then(res => {
+    if (res && res.ok) return res;
+    return cached().then(hit => hit || net.then(r => (r && r.ok ? r : offlinePage()), () => offlinePage()));
+  });
+}

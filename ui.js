@@ -39,7 +39,7 @@
   function dayMonthShort(date) { return new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long' }).format(F.dateFromStr(date)); }
   function dotCls(c) { return c.colorIdx >= 0 ? ' c' + c.colorIdx : c.colorIdx === -4 ? ' card' : c.colorIdx === -2 ? ' inc' : c.colorIdx === -3 ? ' sav' : ''; }
   // Значок категорії: кольорова плашка з піктограмою (власні категорії — перша літера)
-  var CAT_ICONS = { food: 1, cafe: 1, transport: 1, home: 1, household: 1, loans: 1, cards: 1, health: 1, kids: 1, fun: 1, clothes: 1, other: 1 };
+  var CAT_ICONS = { food: 1, cafe: 1, transport: 1, home: 1, household: 1, loans: 1, cards: 1, health: 1, kids: 1, fun: 1, clothes: 1, borrow: 1, other: 1 };
   function catDot(c) {
     var k = c.colorIdx === -2 ? 'in' : c.colorIdx === -3 ? 'sav' : c.colorIdx === -4 ? 'cards' : CAT_ICONS[c.id] ? c.id : '';
     var inner = k ? '<svg class="ic"><use href="#ci-' + k + '"/></svg>' : '<b>' + esc(String(c.name || '?').trim().charAt(0).toUpperCase() || '?') + '</b>';

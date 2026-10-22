@@ -20,7 +20,8 @@
     { id: 'health', name: 'Здоров’я', colorIdx: 4, limit: null },
     { id: 'kids', name: 'Діти', colorIdx: 5, limit: null },
     { id: 'clothes', name: 'Одяг та взуття', colorIdx: 10, limit: null },
-    { id: 'fun', name: 'Розваги й подарунки', colorIdx: 6, limit: null }
+    { id: 'fun', name: 'Розваги й подарунки', colorIdx: 6, limit: null },
+    { id: 'borrow', name: 'Позики', colorIdx: 11, limit: null }
   ];
   var OTHER = { id: 'other', name: 'Інше', colorIdx: -1, limit: null };
   // «Види» всередині категорії (наприклад, у «Продуктах»: молочне, овочі…). Це стартові набори: їх можна змінювати,
@@ -35,7 +36,8 @@
     health: [['pharm', 'Ліки'], ['doctor', 'Лікарі й аналізи'], ['dent', 'Стоматолог'], ['vit', 'Вітаміни']],
     kids: [['school', 'Школа й садок'], ['clubs', 'Гуртки й секції'], ['toys', 'Іграшки'], ['clothes', 'Одяг і взуття'], ['stationery', 'Канцтовари'], ['trifles', 'Дурниці']],
     clothes: [['clothes', 'Одяг'], ['shoes', 'Взуття'], ['acc', 'Аксесуари']],
-    fun: [['gifts', 'Подарунки'], ['cinema', 'Кіно й розваги'], ['hobby', 'Хобі'], ['trip', 'Відпочинок і подорожі'], ['subs', 'Підписки']]
+    fun: [['gifts', 'Подарунки'], ['cinema', 'Кіно й розваги'], ['hobby', 'Хобі'], ['trip', 'Відпочинок і подорожі'], ['subs', 'Підписки']],
+    borrow: [['repay', 'Повернення боргу'], ['lend', 'Дали в борг']]
   };
   function defaultSubs(catId) { return (DEFAULT_SUBS[catId] || []).map(function (x) { return { id: x[0], name: x[1] }; }); }
   function cloneCats() { return DEFAULT_CATS.map(function (c) { return Object.assign({}, c, { subs: defaultSubs(c.id) }); }); }
@@ -228,7 +230,7 @@
       if (changed && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
     }
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
-    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; return; }
+    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; return; }
     // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
     if (!S.meta.mHousehold) {
       S.meta.mHousehold = 1; var cats = S.cfg.categories;
@@ -244,6 +246,17 @@
         var usedC = {}; cs.forEach(function (c) { usedC[c.colorIdx] = 1; }); var cc = 10; for (var q = 0; q < MAX_COLORED; q++) if (!usedC[q]) { cc = q; break; }
         cs.push({ id: 'clothes', name: 'Одяг та взуття', colorIdx: cc, limit: null, subs: defaultSubs('clothes') }); touchCfg();
       } else save();
+    }
+    // Один раз додаємо «Позики» до вже налаштованого набору (якщо такої категорії ще немає).
+    // Немає місця: прапорець не ставимо, тож після видалення зайвої категорії додавання спробується знову.
+    if (!S.meta.mBorrow) {
+      var bs = S.cfg.categories;
+      if (bs.some(function (c) { return c.id === 'borrow' || /^позик/i.test(c.name); })) { S.meta.mBorrow = 1; save(); }
+      else if (bs.length < MAX_COLORED) {
+        S.meta.mBorrow = 1;
+        var usedB = {}; bs.forEach(function (c) { usedB[c.colorIdx] = 1; }); var cb = 11; for (var w = 0; w < MAX_COLORED; w++) if (!usedB[w]) { cb = w; break; }
+        bs.push({ id: 'borrow', name: 'Позики', colorIdx: cb, limit: null, subs: defaultSubs('borrow') }); touchCfg();
+      }
     }
   }
 
@@ -1208,7 +1221,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v19', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v20', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

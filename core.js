@@ -6,7 +6,7 @@
   var KEY = 'fb_state_v1';
   var NUTRIPLAN_KEY = 'nutriplan_user_gemini_key';
   var GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
-  var MAX_COLORED = 14;
+  var MAX_COLORED = 12;
   var CURRENCIES = ['₴', '$', '€', 'zł', '£'];
 
   var DEFAULT_CATS = [
@@ -21,8 +21,7 @@
     { id: 'kids', name: 'Діти', colorIdx: 5, limit: null },
     { id: 'clothes', name: 'Одяг та взуття', colorIdx: 10, limit: null },
     { id: 'fun', name: 'Розваги й подарунки', colorIdx: 6, limit: null },
-    { id: 'borrow', name: 'Позики', colorIdx: 11, limit: null },
-    { id: 'gift', name: 'Подарунки', colorIdx: 12, limit: null }
+    { id: 'borrow', name: 'Позики', colorIdx: 11, limit: null }
   ];
   var OTHER = { id: 'other', name: 'Інше', colorIdx: -1, limit: null };
   // «Види» всередині категорії (наприклад, у «Продуктах»: молочне, овочі…). Це стартові набори: їх можна змінювати,
@@ -231,7 +230,7 @@
       if (changed && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
     }
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
-    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; S.meta.mGift = 1; return; }
+    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; return; }
     // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
     if (!S.meta.mHousehold) {
       S.meta.mHousehold = 1; var cats = S.cfg.categories;
@@ -257,16 +256,6 @@
         S.meta.mBorrow = 1;
         var usedB = {}; bs.forEach(function (c) { usedB[c.colorIdx] = 1; }); var cb = 11; for (var w = 0; w < MAX_COLORED; w++) if (!usedB[w]) { cb = w; break; }
         bs.push({ id: 'borrow', name: 'Позики', colorIdx: cb, limit: null, subs: defaultSubs('borrow') }); touchCfg();
-      }
-    }
-    // Те саме для «Подарунків» (окрема категорія; види «Подарунки» всередині «Розваг» лишаються як були)
-    if (!S.meta.mGift) {
-      var gs = S.cfg.categories;
-      if (gs.some(function (c) { return c.id === 'gift' || /^подарунк/i.test(c.name); })) { S.meta.mGift = 1; save(); }
-      else if (gs.length < MAX_COLORED) {
-        S.meta.mGift = 1;
-        var usedG = {}; gs.forEach(function (c) { usedG[c.colorIdx] = 1; }); var cg = 12; for (var z = 0; z < MAX_COLORED; z++) if (!usedG[z]) { cg = z; break; }
-        gs.push({ id: 'gift', name: 'Подарунки', colorIdx: cg, limit: null, subs: [] }); touchCfg();
       }
     }
   }
@@ -1232,7 +1221,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v21', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v20', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

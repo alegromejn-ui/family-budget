@@ -7,7 +7,7 @@
 :root {
   --paper: #EDF1EE; --sheet: #FFFFFF; --ink: #0F1D19; --ink2: #50605A; --line: #D3DBD7; --wash: #E3E9E5;
   --accent: #0F4D3F; --on-accent: #FFFFFF; --warn: #A8321F; --warn-wash: #FBE9E5; --bar: #9DB0A8;
-  --c0: #0072B2; --c1: #E69F00; --c2: #009E73; --c3: #CC79A7; --c4: #D55E00; --c5: #56B4E9; --c6: #6C5CC9; --c7: #7A8F1C; --c8: #8B5E3C; --c9: #5C7A99; --c10: #B8336A; --c11: #3F7F7A; --cn: #8A9993;
+  --c0: #0072B2; --c1: #E69F00; --c2: #009E73; --c3: #CC79A7; --c4: #D55E00; --c5: #56B4E9; --c6: #6C5CC9; --c7: #7A8F1C; --c8: #8B5E3C; --c9: #5C7A99; --c10: #B8336A; --c11: #3F7F7A; --c12: #C0392B; --c13: #B7950B; --cn: #8A9993;
   --r: 14px; --nav-h: 64px;
   color-scheme: light;
 }
@@ -15,7 +15,7 @@
   :root {
     --paper: #0B1310; --sheet: #151F1B; --ink: #E7EFEB; --ink2: #A3B3AC; --line: #2A3833; --wash: #1D2925;
     --accent: #4FD1A8; --on-accent: #06231B; --warn: #FF9C8A; --warn-wash: #3A1D18; --bar: #51645C;
-    --c0: #4DA3E0; --c1: #F0B429; --c2: #2FC79A; --c3: #E096BF; --c4: #F0813F; --c5: #7CC5F0; --c6: #9C8CF0; --c7: #B5C93A; --c8: #C4916A; --c9: #8FA9C4; --c10: #F07AA8; --c11: #6FC2BA; --cn: #7B8B85;
+    --c0: #4DA3E0; --c1: #F0B429; --c2: #2FC79A; --c3: #E096BF; --c4: #F0813F; --c5: #7CC5F0; --c6: #9C8CF0; --c7: #B5C93A; --c8: #C4916A; --c9: #8FA9C4; --c10: #F07AA8; --c11: #6FC2BA; --c12: #F0705F; --c13: #E8C547; --cn: #7B8B85;
     color-scheme: dark;
   }
 }
@@ -295,8 +295,8 @@ section + .btn { margin-top: 26px; }
 .edit-row .subline span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* v17: одяг, кредитки */
-.dot.c10 { background: var(--c10); } .dot.c11 { background: var(--c11); }
-.hbar .track i.c10 { background: var(--c10); } .hbar .track i.c11 { background: var(--c11); }
+.dot.c10 { background: var(--c10); } .dot.c11 { background: var(--c11); } .dot.c12 { background: var(--c12); } .dot.c13 { background: var(--c13); }
+.hbar .track i.c10 { background: var(--c10); } .hbar .track i.c11 { background: var(--c11); } .hbar .track i.c12 { background: var(--c12); } .hbar .track i.c13 { background: var(--c13); }
 .dot.card { background: transparent; border: 2.5px solid var(--warn); border-radius: 3px; }
 .cards-sec .ledger > li .acts, .rec-row .acts.wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .cardhist { margin-top: 10px; }
@@ -374,7 +374,7 @@ section + .btn { margin-top: 26px; }
 .cico .ic { width: 19px; height: 19px; stroke-width: 2.1; }
 .cico b { font-size: 15px; font-weight: 700; }
 .cico.c0 { --cc: var(--c0); } .cico.c1 { --cc: var(--c1); } .cico.c2 { --cc: var(--c2); } .cico.c3 { --cc: var(--c3); } .cico.c4 { --cc: var(--c4); } .cico.c5 { --cc: var(--c5); }
-.cico.c6 { --cc: var(--c6); } .cico.c7 { --cc: var(--c7); } .cico.c8 { --cc: var(--c8); } .cico.c9 { --cc: var(--c9); } .cico.c10 { --cc: var(--c10); } .cico.c11 { --cc: var(--c11); }
+.cico.c6 { --cc: var(--c6); } .cico.c7 { --cc: var(--c7); } .cico.c8 { --cc: var(--c8); } .cico.c9 { --cc: var(--c9); } .cico.c10 { --cc: var(--c10); } .cico.c11 { --cc: var(--c11); } .cico.c12 { --cc: var(--c12); } .cico.c13 { --cc: var(--c13); }
 .cico.inc { --cc: var(--accent); } .cico.sav { --cc: var(--c6); } .cico.card { --cc: var(--warn); }
 .txrow .cico { width: 42px; height: 42px; border-radius: 14px; }
 .txrow .cico .ic { width: 21px; height: 21px; }
@@ -384,7 +384,7 @@ section + .btn { margin-top: 26px; }
 .meter { height: 7px; border-radius: 4px; }
 .meter i { background: var(--accent); }
 .meter i.c0 { background: var(--c0); } .meter i.c1 { background: var(--c1); } .meter i.c2 { background: var(--c2); } .meter i.c3 { background: var(--c3); } .meter i.c4 { background: var(--c4); } .meter i.c5 { background: var(--c5); }
-.meter i.c6 { background: var(--c6); } .meter i.c7 { background: var(--c7); } .meter i.c8 { background: var(--c8); } .meter i.c9 { background: var(--c9); } .meter i.c10 { background: var(--c10); } .meter i.c11 { background: var(--c11); }
+.meter i.c6 { background: var(--c6); } .meter i.c7 { background: var(--c7); } .meter i.c8 { background: var(--c8); } .meter i.c9 { background: var(--c9); } .meter i.c10 { background: var(--c10); } .meter i.c11 { background: var(--c11); } .meter i.c12 { background: var(--c12); } .meter i.c13 { background: var(--c13); }
 .meter.over i { background: var(--warn); }
 .catlink .lrow + .meter, .catlink .meter { margin-left: 46px; }
 .catlink .status, li > .status { padding-left: 0; }

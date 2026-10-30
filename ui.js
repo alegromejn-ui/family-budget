@@ -39,7 +39,7 @@
   function dayMonthShort(date) { return new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long' }).format(F.dateFromStr(date)); }
   function dotCls(c) { return c.colorIdx >= 0 ? ' c' + c.colorIdx : c.colorIdx === -4 ? ' card' : c.colorIdx === -2 ? ' inc' : c.colorIdx === -3 ? ' sav' : ''; }
   // Значок категорії: кольорова плашка з піктограмою (власні категорії — перша літера)
-  var CAT_ICONS = { food: 1, cafe: 1, transport: 1, home: 1, household: 1, loans: 1, cards: 1, health: 1, kids: 1, fun: 1, clothes: 1, borrow: 1, gift: 1, other: 1 };
+  var CAT_ICONS = { food: 1, cafe: 1, transport: 1, home: 1, household: 1, loans: 1, cards: 1, health: 1, kids: 1, fun: 1, gifts: 1, subs: 1, clothes: 1, borrow: 1, other: 1 };
   function catDot(c) {
     var k = c.colorIdx === -2 ? 'in' : c.colorIdx === -3 ? 'sav' : c.colorIdx === -4 ? 'cards' : CAT_ICONS[c.id] ? c.id : '';
     var inner = k ? '<svg class="ic"><use href="#ci-' + k + '"/></svg>' : '<b>' + esc(String(c.name || '?').trim().charAt(0).toUpperCase() || '?') + '</b>';
@@ -57,6 +57,7 @@
   var curYm = F.todayStr().slice(0, 7);
   var ym = curYm;
   var catFilter = 'all';
+  var payFilter = 'all';
   var repMode = 'chart';
 
   // ---------- Верх сторінки та статус синхронізації ----------
@@ -120,9 +121,10 @@
 
   function txRowHtml(t) {
     var c = F.catInfo(t); var sb = F.subOf(t); var cname = c.name + (sb ? ' · ' + sb.name : ''); var title = t.note || cname;
-    var sub = (t.note ? cname + ', ' : '') + (t.member || '');
+    var sub = esc((t.note ? cname + ', ' : '') + (t.member || '')); var pi = c.kind === 'expense' ? F.payInfo(F.payOf(t)) : null;
+    if (pi) sub += (sub ? ' · ' : '') + '<i class="paytag ' + pi.id + '">' + esc(pi.short) + '</i>';
     var amt = c.kind === 'income' ? signedMoney(t.amount) : c.kind === 'saving' ? (t.amount < 0 ? 'зняття ' + money(-t.amount) : signedMoney(t.amount)) : c.kind === 'card' ? (t.amount < 0 ? 'погасили ' + money(-t.amount) : 'взяли ' + money(t.amount)) : money(t.amount);
-    return '<button class="txrow" data-act="edit" data-id="' + esc(t.id) + '">' + catDot(c) + '<span class="main"><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></span><span class="amt num">' + esc(amt) + '</span></button>';
+    return '<button class="txrow" data-act="edit" data-id="' + esc(t.id) + '">' + catDot(c) + '<span class="main"><b>' + esc(title) + '</b><span>' + sub + '</span></span><span class="amt num">' + esc(amt) + '</span></button>';
   }
 
   // ---------- Нові блоки головного екрана ----------
@@ -299,6 +301,12 @@
       h += '<div class="chips" role="group" aria-label="Фільтр за категорією"><button class="chip" data-act="filter" data-c="all" aria-pressed="' + (catFilter === 'all') + '">Усі</button>' +
         F.categories().map(function (c) { return '<button class="chip" data-act="filter" data-c="' + esc(c.id) + '" aria-pressed="' + (catFilter === c.id) + '">' + catDot(c) + esc(c.name) + '</button>'; }).join('') + '</div>';
       list = list.filter(function (t) { return catFilter === 'all' || F.catById(t.category, t.cn).id === catFilter; });
+      var bp = F.byPay(ym);
+      if (!bp.items.length) payFilter = 'all';
+      else {
+        h += '<div class="seg full" role="group" aria-label="Фільтр за карткою">' + [{ id: 'all', short: 'Усі картки' }].concat(F.PAYS).map(function (x) { return '<button data-act="pay-filter" data-p="' + x.id + '" aria-pressed="' + (payFilter === x.id) + '">' + esc(x.short) + '</button>'; }).join('') + '</div>';
+        if (payFilter !== 'all') list = list.filter(function (t) { return F.payOf(t) === payFilter; });
+      }
     }
     if (!list.length) {
       var msg = kind === 'expense' ? (shopSel ? 'За цим записом цього місяця витрат немає' : catFilter === 'all' ? 'Витрат за цей місяць немає' : 'У цій категорії порожньо') : kind === 'income' ? 'Доходів за цей місяць немає' : 'Внесків у цілі за цей місяць немає';
@@ -413,6 +421,15 @@
         h += barRows(mem.map(function (m, i) { var idx = i % F.MAX_COLORED; return { name: m.name, value: m.total, cls: 'c' + idx, dot: '<i class="dot c' + idx + '" aria-hidden="true"></i>' }; }), total);
       }
       h += '</div></section>';
+    }
+    var bp = F.byPay(ym);
+    if (bp.items.length) {
+      var prow = bp.items.map(function (x) { return { name: x.name, value: x.total, count: x.count, cls: x.id === 'credit' ? 'c4' : 'c0', dot: '<i class="dot ' + (x.id === 'credit' ? 'c4' : 'c0') + '" aria-hidden="true"></i>' }; });
+      if (bp.none.count) prow.push({ name: 'Картку не вказано', value: bp.none.total, count: bp.none.count, cls: '', dot: '<i class="dot" aria-hidden="true"></i>' });
+      h += '<section class="sec"><div class="sec-h"><h2>З яких карток</h2></div><div class="panel">';
+      if (repMode === 'table') h += '<table class="t"><thead><tr><th>Картка</th><th>Сума</th><th>Платежів</th></tr></thead><tbody>' + prow.map(function (x) { return '<tr><td>' + esc(x.name) + '</td><td class="num">' + money(x.value) + '</td><td class="num">' + x.count + '</td></tr>'; }).join('') + '</tbody></table>';
+      else h += barRows(prow, total);
+      h += '<p class="note" style="margin-top:10px">Картка обирається у формі витрати. Записи, додані раніше, показані як «Картку не вказано».</p></div></section>';
     }
     var shownTypes = 0; cats.forEach(function (c) { if (shownTypes >= 3) return; var x = typesReport(c, shownTypes === 0); if (x) { h += x; shownTypes++; } });
     h += tagReport('shops', 'По магазинах', 'Інші покупки', total, 'Магазин береться з початку нотатки. Додайте його у формі витрати.');
@@ -604,6 +621,12 @@
     if (!items.some(function (c) { return c.id === selId; })) selId = kind === 'expense' ? 'other' : items[0].id;
     return items.map(function (c) { return '<input type="radio" name="cat" id="cat-' + esc(c.id) + '" value="' + esc(c.id) + '"' + (c.id === selId ? ' checked' : '') + '><label for="cat-' + esc(c.id) + '">' + c.dot + esc(c.name) + '</label>'; }).join('');
   }
+  function payRowHtml(kind, curPay) {
+    return '<div class="payrow" id="tx-pay"' + (kind === 'expense' ? '' : ' hidden') + '><p class="lbl">Картка</p><div class="seg full" role="group" aria-label="З якої картки заплатили">' +
+      F.PAYS.map(function (x) { return '<button type="button" data-act="pay" data-p="' + x.id + '" aria-pressed="' + (x.id === curPay) + '">' + ic('card', 'sm') + esc(x.name) + '</button>'; }).join('') + '</div></div>';
+  }
+  function setPay(id) { $$('[data-act=pay]').forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 'p') === id)); }); }
+  function payValue() { var b = $('[data-act=pay][aria-pressed=true]'); return b ? attr(b, 'p') : ''; }
   var TX_TITLE = { expense: ['Нова витрата', 'Редагувати витрату'], income: ['Новий дохід', 'Редагувати дохід'], saving: ['Новий внесок', 'Редагувати внесок'] };
   function openTx(id, preCat) {
     var t = id ? F.state.txs[id] : null; if (id && !t) return;
@@ -616,6 +639,7 @@
       '<div class="amount-wrap"><input class="amount-in" id="tx-amount" inputmode="' + (kind === 'saving' ? 'text' : 'decimal') + '" autocomplete="off" placeholder="0" aria-label="Сума" value="' + esc(amountVal) + '"><span class="cur">' + esc(cur()) + '</span></div>' +
       '<p class="note" id="tx-sign"' + (kind === 'saving' ? '' : ' hidden') + '>Мінус означає зняття з цілі, наприклад -500.</p>' +
       '<p class="note bad" id="tx-err" role="alert" hidden></p>' +
+      payRowHtml(kind, t ? F.payOf(t) : (F.state.meta.lastPay || 'main')) +
       (quickList.length ? '<div class="quick" id="tx-quick" role="group" aria-label="Часті витрати"' + (kind === 'expense' ? '' : ' hidden') + '>' + quickList.map(function (q, n) {
         var c = F.catById(q.category); return '<button type="button" class="chip" data-act="quick" data-i="' + n + '">' + catDot(c) + esc((q.note || c.name) + ' ' + money(q.amount)) + '</button>';
       }).join('') + '</div>' : '') +
@@ -635,8 +659,8 @@
     if (!cat) return showErr('tx-err', kind === 'saving' ? 'Спершу створіть ціль у «Ще».' : 'Оберіть категорію.');
     var sub = subValue(); var own = $('#tx-sub-own'); var ownTxt = own && !$('#tx-sub').hidden ? own.value.trim() : '';
     if (ownTxt) { var es = F.ensureSub(cat.value, ownTxt); if (es.error) return showErr('tx-err', es.error); sub = es.sub.id; }
-    var p = { amount: $('#tx-amount').value, category: cat.value, sub: sub, date: $('#tx-date').value, note: $('#tx-note').value };
-    var label = function (tx) { var c = F.catInfo(tx); return c.kind === 'income' ? 'Дохід додано: ' + c.name + ', ' + signedMoney(tx.amount) : c.kind === 'saving' ? 'Внесок записано: ' + c.name + ', ' + signedMoney(tx.amount) : 'Додано: ' + c.name + ', ' + money(tx.amount); };
+    var p = { amount: $('#tx-amount').value, category: cat.value, sub: sub, pay: payValue(), date: $('#tx-date').value, note: $('#tx-note').value };
+    var label = function (tx) { var c = F.catInfo(tx); return c.kind === 'income' ? 'Дохід додано: ' + c.name + ', ' + signedMoney(tx.amount) : c.kind === 'saving' ? 'Внесок записано: ' + c.name + ', ' + signedMoney(tx.amount) : 'Додано: ' + c.name + ', ' + money(tx.amount) + (F.payInfo(F.payOf(tx)) ? ' (' + F.payInfo(F.payOf(tx)).name.toLowerCase() + ')' : ''); };
     if (id) {
       var r = F.updateTx(id, p); if (r.error) return showErr('tx-err', r.error);
       closeSheet(); render(); refreshList(); toast('Зміни збережено', 'Скасувати', function () { F.restoreSnapshot(r.before); render(); });
@@ -660,13 +684,14 @@
     return '<div class="split-row"><span class="sname">' + esc(name) + '</span><input class="in" inputmode="decimal" autocomplete="off" aria-label="Сума: ' + esc(name) + '" value="' + esc(String(amount).replace('.', ',')) + '">' +
       '<span class="selwrap"><select class="in cat" aria-label="Категорія: ' + esc(name) + '">' + catOptions(cat) + '</select><select class="in sub" data-cat="' + esc(cat) + '" aria-label="Вид: ' + esc(name) + '"' + (F.subsOf(cat).length ? '' : ' hidden') + '>' + subOptions(cat, sub) + '</select></span><button type="button" class="ibtn" data-act="split-del" aria-label="Прибрати: ' + esc(name) + '">' + ic('x') + '</button></div>';
   }
-  function openSplit(r, formDate) {
+  function openSplit(r, formDate, formPay) {
     splitCtx = { total: r.total, currency: r.currency, items: r.items, itemsSum: r.itemsSum, merchant: r.merchant };
     var rows = r.items.map(function (x) { return splitRowHtml(x.name || 'Позиція', x.amount, x.category, x.sub); });
     var rest = F.round2(r.total - r.itemsSum);
     if (rest > 0.009) rows.push(splitRowHtml('Решта чека (знижки, нерозпізнане)', rest, 'other'));
     var c = r.currency ? (CUR_MAP[r.currency.toUpperCase()] || r.currency) : ''; var curWarn = c && c !== cur() ? ' На чеку валюта ' + c + ', а в додатку ' + cur() + ': перевірте суми.' : '';
     var html = '<form data-form="split" novalidate>' + sheetTop('Чек по категоріях', 'Покупки з чека розкладено по категоріях. Перевірте суми й за потреби змініть категорію. Для кожної категорії (і виду) буде записано окрему витрату.' + esc(curWarn)) +
+      payRowHtml('expense', formPay || F.state.meta.lastPay || 'main') +
       '<div class="row2"><label class="field"><span>Дата</span><input class="in" type="date" id="sp-date" value="' + esc(r.date || formDate || F.todayStr()) + '"></label>' +
       '<label class="field"><span>Магазин</span><input class="in" id="sp-note" maxlength="200" list="note-list" autocomplete="off" placeholder="За бажанням" value="' + esc(r.merchant) + '"></label></div>' +
       '<datalist id="note-list">' + F.noteSuggestions().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
@@ -696,7 +721,7 @@
     var n = order.length; var b = $('#split-save'); if (b) { b.textContent = n ? 'Записати ' + n + ' ' + plural(n, 'витрату', 'витрати', 'витрат') : 'Записати'; b.disabled = !n; }
   }
   function submitSplit() {
-    var rows = splitRows(); var res = F.addSplit({ date: $('#sp-date').value, note: $('#sp-note').value, rows: rows.map(function (x) { return { category: x.category, sub: x.sub, amount: x.raw }; }) });
+    var rows = splitRows(); var res = F.addSplit({ date: $('#sp-date').value, note: $('#sp-note').value, pay: payValue(), rows: rows.map(function (x) { return { category: x.category, sub: x.sub, amount: x.raw }; }) });
     if (res.error) return showErr('split-err', res.error);
     var sum = F.round2(res.txs.reduce(function (t, x) { return t + x.amount; }, 0)); var n = res.txs.length; splitCtx = null;
     closeSheet(); render(); toast('Записано ' + n + ' ' + plural(n, 'витрату', 'витрати', 'витрат') + ' на ' + money(sum), 'Скасувати', function () { res.txs.forEach(function (t) { F.setDeleted(t.id, true); }); render(); }, 7000);
@@ -705,8 +730,8 @@
     var btn = $('#tx-scan'); var note = $('#tx-scan-note'); if (!btn || !file) return;
     btn.disabled = true; btn.lastChild.textContent = 'Читаю чек…'; note.className = 'note'; note.textContent = 'Це триває кілька секунд.';
     try {
-      var formDate = $('#tx-date') ? $('#tx-date').value : ''; var r = await F.scanReceipt(file); var parts = [];
-      if (shouldSplit(r)) { openSplit(r, formDate); return; }
+      var formDate = $('#tx-date') ? $('#tx-date').value : ''; var formPay = payValue(); var r = await F.scanReceipt(file); var parts = [];
+      if (shouldSplit(r)) { openSplit(r, formDate, formPay); return; }
       if (r.total) { $('#tx-amount').value = String(r.total).replace('.', ','); parts.push('суму'); }
       if (r.date) { $('#tx-date').value = r.date; parts.push('дату'); }
       var radio = $('#cat-' + r.category); if (radio) { radio.checked = true; syncSub(); parts.push('категорію'); }
@@ -763,7 +788,7 @@
 
   // --- Регулярні платежі ---
   function recText(r) {
-    return money(r.amount) + ' щомісяця, ' + r.day + '-го числа, ' + F.catById(r.category).name;
+    return money(r.amount) + ' щомісяця, ' + r.day + '-го числа, ' + F.catById(r.category).name + (F.payInfo(r.pay) ? ', ' + F.payInfo(r.pay).name.toLowerCase() : '');
   }
   function openRecurring(editId, keep) {
     var S = F.state; var e = editId ? S.cfg.recurring.filter(function (r) { return r.id === editId; })[0] : null;
@@ -776,6 +801,7 @@
       '<div class="row2"><label class="field"><span>Сума, ' + esc(cur()) + '</span><input class="in" id="rec-amount" inputmode="decimal" value="' + (e ? esc(String(e.amount).replace('.', ',')) : '') + '"></label>' +
       '<label class="field"><span>День місяця</span><input class="in" id="rec-day" inputmode="numeric" maxlength="2" placeholder="1-31" value="' + (e ? e.day : '') + '"></label></div>' +
       '<label class="field"><span>Категорія</span><select class="in" id="rec-cat">' + F.categories().map(function (c) { return '<option value="' + esc(c.id) + '"' + ((e ? e.category : 'home') === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="field"><span>Картка</span><select class="in" id="rec-pay"><option value="">Не вказувати</option>' + F.PAYS.map(function (x) { return '<option value="' + x.id + '"' + (e && e.pay === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label>' +
       '<p class="note bad" id="rec-err" role="alert" hidden></p>' +
       '<p class="note">' + (e ? 'Зміни діють з наступних платежів, уже записані місяці не змінюються.' : 'Якщо день більший, ніж у місяці днів (наприклад, 31 у квітні), платіж піде в останній день місяця.') + '</p>' +
       '<button class="btn" type="submit">' + (e ? 'Зберегти зміни' : 'Додати платіж') + '</button>' + (e ? '<button type="button" class="btn alt" data-act="rec-cancel">Скасувати зміни</button>' : '') + '</form>';
@@ -1030,7 +1056,7 @@
       $$('[data-act=tx-kind]', form).forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 'k') === k)); });
       $('#tx-cats').innerHTML = catGridHtml(k, k === 'expense' ? F.state.meta.lastCat : 'in_salary', null);
       $('#tx-title').textContent = TX_TITLE[k][0];
-      var q = $('#tx-quick'); if (q) q.hidden = k !== 'expense'; $('#tx-scan-wrap').hidden = k !== 'expense'; $$('.tagrow').forEach(function (e) { e.hidden = k !== 'expense'; });
+      var q = $('#tx-quick'); if (q) q.hidden = k !== 'expense'; $('#tx-pay').hidden = k !== 'expense'; $('#tx-scan-wrap').hidden = k !== 'expense'; $$('.tagrow').forEach(function (e) { e.hidden = k !== 'expense'; });
       syncSub();
     },
     sub: function (el) { setSub(attr(el, 's')); },
@@ -1042,10 +1068,10 @@
     },
     quick: function (el) {
       var q = quickList[Number(attr(el, 'i'))]; if (!q) return;
-      $('#tx-amount').value = String(q.amount).replace('.', ','); $('#tx-note').value = q.note; var r = $('#cat-' + q.category); if (r) r.checked = true; syncSub(); setSub(q.sub || ''); syncShops();
+      $('#tx-amount').value = String(q.amount).replace('.', ','); $('#tx-note').value = q.note; var r = $('#cat-' + q.category); if (r) r.checked = true; syncSub(); setSub(q.sub || ''); if (q.pay) setPay(q.pay); syncShops();
     },
     'repeat-tx': function (el) { var r = F.repeatTx(attr(el, 'id')); if (r.error) return toast(r.error); closeSheet(); render(); refreshList(); toast('Додано на сьогодні', 'Скасувати', function () { F.setDeleted(r.tx.id, true); render(); refreshList(); }); },
-    'list-kind': function (el) { shopSel = null; listKind = attr(el, 'k'); catFilter = 'all'; if (view !== 'list') { view = 'list'; window.scrollTo(0, 0); } render(); },
+    'list-kind': function (el) { shopSel = null; listKind = attr(el, 'k'); catFilter = 'all'; payFilter = 'all'; if (view !== 'list') { view = 'list'; window.scrollTo(0, 0); } render(); },
     bulk: function () { openBulk(); },
     'bulk-do': function (el) {
       var ids = F.search(query, listKind).map(function (t) { return t.id; }); var snaps = ids.map(function (id) { return Object.assign({}, F.state.txs[id]); });
@@ -1098,6 +1124,8 @@
     month: function (el) { var n = F.addMonths(ym, Number(attr(el, 'd'))); if (n > curYm) return; ym = n; render(); },
     pickmonth: function (el) { ym = attr(el, 'ym'); render(); },
     filter: function (el) { catFilter = attr(el, 'c'); render(); },
+    'pay-filter': function (el) { payFilter = attr(el, 'p'); render(); },
+    pay: function (el) { setPay(attr(el, 'p')); },
     repmode: function (el) { repMode = attr(el, 'm'); render(); },
     strip: function (el) {
       var d = Number(attr(el, 'd')); var arr = F.dailySeries(curYm); var v = arr[d - 1] || 0;
@@ -1159,7 +1187,7 @@
     } else if (kind === 'cat-add') {
       var r = F.addCategory($('#cat-new').value); if (r.error) return toast(r.error, null, null, 6000); openBudget(true); render();
     } else if (kind === 'rec') {
-      var id = attr(form, 'id'); var p = { name: $('#rec-name').value, amount: $('#rec-amount').value, day: $('#rec-day').value, category: $('#rec-cat').value };
+      var id = attr(form, 'id'); var p = { name: $('#rec-name').value, amount: $('#rec-amount').value, day: $('#rec-day').value, category: $('#rec-cat').value, pay: $('#rec-pay').value };
       var res = id ? F.updateRecurring(id, p) : F.addRecurring(p); if (res.error) return showErr('rec-err', res.error);
       openRecurring(null, false); render(); toast(id ? 'Платіж змінено' : 'Платіж додано');
     } else if (kind === 'split') {

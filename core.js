@@ -31,14 +31,16 @@
   var MAX_SUBS = 20;
   var DEFAULT_SUBS = {
     food: [['meat', 'М\u2019ясо й риба'], ['dairy', 'Молочне й яйця'], ['veg', 'Овочі й фрукти'], ['bread', 'Хліб і випічка'], ['dry', 'Крупи й консерви'], ['drinks', 'Напої'], ['sweets', 'Солодощі й снеки']],
-    cafe: [['coffee', 'Кава й десерти'], ['lunch', 'Обіди'], ['delivery', 'Доставка їжі'], ['rest', 'Ресторани']],
+    cafe: [['coffee', 'Кава й десерти'], ['kfc', 'KFC'], ['mcd', 'McDonalds'], ['delivery', 'Доставка їжі'], ['rest', 'Ресторани']],
     transport: [['fuel', 'Пальне'], ['public', 'Громадський транспорт'], ['taxi', 'Таксі'], ['service', 'Ремонт і ТО'], ['park', 'Парковка й мийка']],
     home: [['elec', 'Світло'], ['gas', 'Газ'], ['water', 'Вода'], ['heat', 'Опалення'], ['net', 'Інтернет і ТБ'], ['phone', 'Мобільний зв\u2019язок']],
-    household: [['chem', 'Побутова хімія'], ['hyg', 'Гігієна'], ['repair', 'Ремонт та інструменти'], ['tech', 'Техніка'], ['decor', 'Меблі й декор']],
+    household: [['chem', 'Побутова хімія'], ['hyg', 'Гігієна'], ['hair', 'Перукарня'], ['repair', 'Ремонт та інструменти'], ['tech', 'Техніка'], ['decor', 'Меблі й декор']],
     health: [['pharm', 'Ліки'], ['doctor', 'Лікарі й аналізи'], ['dent', 'Стоматолог'], ['vit', 'Вітаміни']],
     kids: [['school', 'Школа й садок'], ['clubs', 'Гуртки й секції'], ['toys', 'Іграшки'], ['clothes', 'Одяг і взуття'], ['stationery', 'Канцтовари'], ['trifles', 'Дурниці']],
     clothes: [['clothes', 'Одяг'], ['shoes', 'Взуття'], ['acc', 'Аксесуари']],
     fun: [['cinema', 'Кіно й розваги'], ['hobby', 'Хобі'], ['trip', 'Відпочинок і подорожі']],
+    gifts: [['bday', 'День народження'], ['holiday', 'Свята']],
+    subs: [['tv', 'TV'], ['youtube', 'YouTube'], ['ai', 'AI']],
     borrow: [['repay', 'Повернення боргу'], ['lend', 'Дали в борг']]
   };
   function defaultSubs(catId) { return (DEFAULT_SUBS[catId] || []).map(function (x) { return { id: x[0], name: x[1] }; }); }
@@ -109,7 +111,7 @@
     });
     return out;
   }
-  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], otherSubs: [], cards: defaultCards(), updatedAt: 0 }; }
+  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], otherSubs: [], cards: defaultCards(), plans: [], updatedAt: 0 }; }
   function freshState() {
     return {
       v: 1, txs: {}, cfg: defaultCfg(), cfgDirty: false,
@@ -120,6 +122,19 @@
   function cleanMap(m, keyRe, max) {
     var out = {}; if (!m || typeof m !== 'object') return out;
     Object.keys(m).slice(0, max).forEach(function (k) { var v = parseAmount(m[k]); if (keyRe.test(k) && v != null) out[k] = v; });
+    return out;
+  }
+  // Заплановані витрати: «у грудні на подарунки 10 000». Це резерв на категорію в місяці, а не окрема витрата,
+  // тому в підсумки витрат не входить: потім його порівнюємо з тим, що справді витрачено в цій категорії.
+  var MAX_PLANS = 60;
+  function cleanPlans(a) {
+    var out = [], ids = {};
+    (Array.isArray(a) ? a : []).forEach(function (x) {
+      if (!x || out.length >= MAX_PLANS) return;
+      var id = String(x.id == null ? '' : x.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24); var amount = parseAmount(x.amount);
+      if (!id || ids[id] || amount == null || !/^\d{4}-\d{2}$/.test(String(x.month))) return;
+      ids[id] = 1; out.push({ id: id, name: String(x.name == null ? '' : x.name).replace(/\s+/g, ' ').trim().slice(0, 40), amount: amount, category: String(x.category || 'other').slice(0, 40), month: String(x.month) });
+    });
     return out;
   }
   function normalizeCfg(c) {
@@ -149,6 +164,7 @@
       clubs: cleanShops(c.clubs),
       otherSubs: cleanSubs(c.otherSubs),
       cards: Array.isArray(c.cards) ? cleanCards(c.cards) : defaultCards(),
+      plans: cleanPlans(c.plans),
       updatedAt: Number(c.updatedAt) || 0
     };
   }
@@ -232,7 +248,7 @@
       if (changed && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
     }
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
-    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; migrateFunSplit(true); return; }
+    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; migrateFunSplit(true); S.meta.mSubsV2 = 1; return; }
     // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
     if (!S.meta.mHousehold) {
       S.meta.mHousehold = 1; var cats = S.cfg.categories;
@@ -261,6 +277,7 @@
       }
     }
     migrateFunSplit(false);
+    migrateSubsV2();
   }
 
   // «Розваги й подарунки» розділено на «Розваги», «Подарунки» та «Підписки».
@@ -282,7 +299,7 @@
       SPLIT_FROM_FUN.forEach(function (x) {
         if (splitTarget(x.id) || cats.length >= MAX_COLORED) return;
         var def = DEFAULT_CATS.filter(function (c) { return c.id === x.id; })[0];
-        cats.splice(at++, 0, { id: x.id, name: def.name, colorIdx: freeColor(cats, def.colorIdx), limit: null, subs: [] }); cfgChanged = true;
+        cats.splice(at++, 0, { id: x.id, name: def.name, colorIdx: freeColor(cats, def.colorIdx), limit: null, subs: defaultSubs(x.id) }); cfgChanged = true;
       });
     }
     var moved = 0;
@@ -299,6 +316,27 @@
     if (cfgChanged && !untouched) touchCfg(); else save();
     if (moved) scheduleSync();
   }
+  // Нові види: «Подарунки» (День народження, Свята), «Підписки» (TV, YouTube, AI), «Кафе й ресторани» (KFC, McDonalds, без «Обідів»), «Побут» (Перукарня).
+  // Один раз додаємо їх до вже налаштованого набору; наявні за назвою не дублюємо, записи видаленого виду лишаються в категорії без виду.
+  var SUBS_V2 = [
+    { id: 'cafe', add: [['kfc', 'KFC'], ['mcd', 'McDonalds']], remove: ['lunch'] },
+    { id: 'gifts', add: [['bday', 'День народження'], ['holiday', 'Свята']] },
+    { id: 'subs', add: [['tv', 'TV'], ['youtube', 'YouTube'], ['ai', 'AI']] },
+    { id: 'household', add: [['hair', 'Перукарня']] }
+  ];
+  function migrateSubsV2() {
+    if (S.meta.mSubsV2) return; var changed = false;
+    SUBS_V2.forEach(function (x) {
+      var cat = x.id === 'gifts' || x.id === 'subs' ? splitTarget(x.id) : S.cfg.categories.filter(function (c) { return c.id === x.id; })[0];
+      if (!cat) return; cat.subs = Array.isArray(cat.subs) ? cat.subs : [];
+      (x.remove || []).forEach(function (rid0) { if (cat.subs.some(function (y) { return y.id === rid0; })) { cat.subs = cat.subs.filter(function (y) { return y.id !== rid0; }); changed = true; } });
+      x.add.forEach(function (a) {
+        if (cat.subs.length >= MAX_SUBS || cat.subs.some(function (y) { return y.name.toLowerCase() === a[1].toLowerCase(); })) return;
+        cat.subs.push({ id: cat.subs.some(function (y) { return y.id === a[0]; }) ? 's_' + rid(6) : a[0], name: a[1] }); changed = true;
+      });
+    });
+    S.meta.mSubsV2 = 1; if (changed) touchCfg(); else save();
+  }
   // Після завантаження спільних налаштувань зі старого телефона нових категорій там може не бути: повертаємо, якщо на них є записи
   function repairSplitCats() {
     if (!S.meta.mFunSplit) return;
@@ -307,7 +345,7 @@
       if (S.cfg.categories.some(function (c) { return c.id === x.id; }) || S.cfg.categories.length >= MAX_COLORED) return;
       var used = Object.keys(S.txs).some(function (k) { var t = S.txs[k]; return !t.deleted && t.category === x.id; }); if (!used) return;
       var def = DEFAULT_CATS.filter(function (c) { return c.id === x.id; })[0];
-      S.cfg.categories.push({ id: x.id, name: def.name, colorIdx: freeColor(S.cfg.categories, def.colorIdx), limit: null, subs: [] }); fixed = true;
+      S.cfg.categories.push({ id: x.id, name: def.name, colorIdx: freeColor(S.cfg.categories, def.colorIdx), limit: null, subs: defaultSubs(x.id) }); fixed = true;
     });
     if (fixed) touchCfg();
   }
@@ -388,7 +426,8 @@
     var n = 0;
     Object.keys(S.txs).forEach(function (k) { var t = S.txs[k]; if (!t.deleted && t.category === id) n++; });
     var r = S.cfg.recurring.filter(function (x) { return x.category === id; }).length;
-    return { txs: n, recurring: r };
+    var pl = (S.cfg.plans || []).filter(function (x) { return x.category === id; }).length;
+    return { txs: n, recurring: r, plans: pl };
   }
   function addCategory(name) {
     name = String(name || '').replace(/\|/g, '/').trim().slice(0, 30);
@@ -419,7 +458,7 @@
   }
   function removeCategory(id) {
     var u = catUsage(id);
-    if (u.txs || u.recurring) return { error: 'У цій категорії є записи (' + u.txs + ' витрат, ' + u.recurring + ' регулярних платежів). Щоб не загубити історію, перейменуйте її або спершу перенесіть записи.' };
+    if (u.txs || u.recurring || u.plans) return { error: 'У цій категорії є записи (' + u.txs + ' витрат, ' + u.recurring + ' регулярних платежів, ' + u.plans + ' запланованих). Щоб не загубити історію, перейменуйте її або спершу перенесіть записи.' };
     S.cfg.categories = S.cfg.categories.filter(function (x) { return x.id !== id; });
     touchCfg();
     return { ok: true };
@@ -637,6 +676,41 @@
   function removeGoal(id) { S.cfg.goals = S.cfg.goals.filter(function (g) { return g.id !== id; }); touchCfg(); }
   function addContribution(goalId, amount, date, note) {
     return addTx({ amount: amount, category: 'sv_' + goalId, date: date, note: note || '' });
+  }
+
+  // ---------- Заплановані витрати ----------
+  function planById(id) { return S.cfg.plans.filter(function (x) { return x.id === id; })[0]; }
+  function planFields(p) {
+    var amount = parseAmount(p.amount); if (amount == null) return { error: 'Вкажіть суму: число більше нуля.' };
+    if (!/^\d{4}-\d{2}$/.test(String(p.month || ''))) return { error: 'Вкажіть місяць.' };
+    var cat = catById(p.category); if (!categories().some(function (c) { return c.id === p.category; })) return { error: 'Оберіть категорію.' };
+    return { name: String(p.name == null ? '' : p.name).replace(/\s+/g, ' ').trim().slice(0, 40), amount: amount, category: cat.id, month: String(p.month) };
+  }
+  function addPlan(p) {
+    if (S.cfg.plans.length >= MAX_PLANS) return { error: 'Забагато планів (до ' + MAX_PLANS + '). Видаліть непотрібні.' };
+    var f = planFields(p); if (f.error) return f;
+    var pl = { id: 'p_' + rid(6), name: f.name, amount: f.amount, category: f.category, month: f.month };
+    S.cfg.plans.push(pl); touchCfg(); return { plan: pl };
+  }
+  function updatePlan(id, p) {
+    var pl = planById(id); if (!pl) return { error: 'План не знайдено.' };
+    var f = planFields(p); if (f.error) return f;
+    Object.assign(pl, f); touchCfg(); return { plan: pl };
+  }
+  function removePlan(id) { S.cfg.plans = S.cfg.plans.filter(function (x) { return x.id !== id; }); touchCfg(); }
+  // Заплановане й фактичне за місяць по категоріях (факт: усі витрати категорії за місяць)
+  function planVsFact(ym) {
+    var spent = spentByCategory(ym); var m = {}, order = [];
+    S.cfg.plans.forEach(function (x) { if (x.month !== ym) return; var id = catById(x.category).id; if (!m[id]) { m[id] = { cat: catById(id), planned: 0, spent: spent[id] || 0 }; order.push(id); } m[id].planned = round2(m[id].planned + x.amount); });
+    var items = order.map(function (id) { var o = m[id]; o.left = round2(o.planned - o.spent); o.over = o.spent > o.planned; return o; }).sort(function (a, b) { return b.planned - a.planned; });
+    return { items: items, planned: round2(items.reduce(function (t, x) { return t + x.planned; }, 0)), spent: round2(items.reduce(function (t, x) { return t + x.spent; }, 0)) };
+  }
+  // Місяці з планами: поточний і майбутні за зростанням, потім минулі від найближчого
+  function planGroups(today) {
+    var cur = ymOf(today); var by = {};
+    S.cfg.plans.forEach(function (x) { (by[x.month] = by[x.month] || []).push(x); });
+    var ms = Object.keys(by); var fut = ms.filter(function (k) { return k >= cur; }).sort(); var past = ms.filter(function (k) { return k < cur; }).sort().reverse();
+    return fut.concat(past).map(function (k) { return { ym: k, past: k < cur, items: by[k].slice().sort(function (a, b) { return b.amount - a.amount; }), total: round2(by[k].reduce(function (t, x) { return t + x.amount; }, 0)) }; });
   }
 
   // ---------- Кредити та картки ----------
@@ -1205,6 +1279,8 @@
     if (ym === curYm) ctx.dayOfMonth = { day: Number(today.slice(8, 10)), of: daysInMonth(ym) };
     var lim = S.cfg.categories.filter(function (c) { return c.limit > 0; }).map(function (c) { return { name: c.name, limit: c.limit }; }); if (lim.length) ctx.categoryLimits = lim;
     var ml = Object.keys(S.cfg.memberLimits || {}).map(function (n) { return { name: n, limit: S.cfg.memberLimits[n] }; }); if (ml.length) ctx.personLimits = ml;
+    var curM = ymOf(today); var pl = S.cfg.plans.filter(function (x) { return x.month >= curM; }).sort(function (a, b) { return a.month < b.month ? -1 : a.month > b.month ? 1 : 0; }).slice(0, 30);
+    if (pl.length) ctx.plannedExpenses = pl.map(function (x) { return { month: x.month, category: catById(x.category).name, name: x.name || undefined, sum: x.amount }; });
     var saved = goalSavedMap();
     if (S.cfg.goals.length) ctx.goals = S.cfg.goals.map(function (g) { return { name: g.name, target: g.target, saved: saved[g.id] || 0, deadline: g.deadline || null }; });
     if (S.cfg.loans.length) ctx.loans = S.cfg.loans.map(function (l) { return { name: l.name, balance: loanInfo(l, today).balanceNow, ratePercent: l.rate, monthlyPayment: l.payment }; });
@@ -1281,6 +1357,7 @@
     PAYS: PAYS, payOf: payOf, payInfo: payInfo, byPay: byPay, addTx: addTx, updateTx: updateTx, setDeleted: setDeleted, restoreSnapshot: restoreSnapshot, monthTxs: monthTxs, monthKind: monthKind, monthFlow: monthFlow, incomeBySource: incomeBySource, normalizeCfg: normalizeCfg, cfgPayload: cfgPayload, subTotals: subTotals, subOf: subOf, subsOf: subsOf, addSub: addSub, renameSub: renameSub, ensureSub: ensureSub, removeSub: removeSub, subUsage: subUsage, MAX_SUBS: MAX_SUBS, FOOD_ID: FOOD_ID, allLive: allLive, kindOf: kindOf, catInfo: catInfo, resolveCat: resolveCat, INCOME_CATS: INCOME_CATS, catMonthTxs: catMonthTxs, catSeries: catSeries, groupByNote: groupByNote, spentByCategory: spentByCategory, byMember: byMember, dailySeries: dailySeries, monthsSeries: monthsSeries, members: members, sum: sum,
     monthBudget: monthBudget, overview: overview, setMonthBudget: setMonthBudget, setMemberLimit: setMemberLimit, monthSummary: monthSummary,
     // цілі, кредити, швидке додавання
+    planById: planById, addPlan: addPlan, updatePlan: updatePlan, removePlan: removePlan, planVsFact: planVsFact, planGroups: planGroups, MAX_PLANS: MAX_PLANS,
     goalInfo: goalInfo, addGoal: addGoal, updateGoal: updateGoal, removeGoal: removeGoal, addContribution: addContribution, goalById: goalById,
     loanInfo: loanInfo, loansSummary: loansSummary, addLoan: addLoan, updateLoan: updateLoan, removeLoan: removeLoan, loanById: loanById,
     shopOf: shopOf, addShop: addShop, removeShop: removeShop, withShop: withShop, byShop: byShop, clubOf: clubOf, tagOf: tagOf, addTag: addTag, removeTag: removeTag, withTag: withTag, byTag: byTag,
@@ -1293,7 +1370,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v21', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v23', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

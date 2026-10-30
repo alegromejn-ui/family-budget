@@ -176,6 +176,19 @@
       return '<li><button class="catlink" data-act="loans"><span class="lrow"><span class="name">' + catDot(F.catById(l.kind === 'card' ? 'cards' : 'loans')) + '<b>' + esc(l.name) + '</b></span><span class="lead"></span><span class="val num">' + money(i.balanceNow) + '</span>' + ic('right', 'sm chev') + '</span><span class="meter" role="img" aria-label="Виплачено ' + paid + '%"><i style="width:' + paid + '%"></i></span>' + loanStatus(i) + '</button></li>';
     }).join('') + '</ul>';
   }
+  function plansSection() {
+    var groups = F.planGroups(F.todayStr()).filter(function (g) { return !g.past; }).slice(0, 3); if (!groups.length) return '';
+    return '<section class="sec"><div class="sec-h"><h2>Заплановані витрати</h2><button class="btn-text" data-act="plans">Керувати</button></div><div class="panel"><ul class="ledger">' + groups.map(function (g) {
+      var yr = g.ym.slice(0, 4) !== curYm.slice(0, 4) ? ' ' + g.ym.slice(0, 4) : '';
+      var head = '<div class="lrow"><span class="name"><b>' + esc(cap(monthName(g.ym)) + yr) + '</b></span><span class="lead"></span><span class="val num">' + money(g.total) + '</span></div>';
+      if (g.ym === curYm) {
+        var pf = F.planVsFact(g.ym); var pct = pf.planned > 0 ? Math.min(100, Math.round(pf.spent / pf.planned * 100)) : 0; var over = pf.spent > pf.planned;
+        return '<li>' + head + '<span class="meter' + (over ? ' over' : '') + '" role="img" aria-label="Витрачено ' + pct + '% запланованого" style="margin-top:8px"><i style="width:' + pct + '%"></i></span><span class="status' + (over ? ' bad' : '') + '">' + (over ? ic('alert', 'sm') : '') + 'У запланованих категоріях витрачено ' + money(pf.spent) + ' із ' + money(pf.planned) + '</span></li>';
+      }
+      var more = g.items.length - 3;
+      return '<li>' + head + '<p class="status">' + esc(g.items.slice(0, 3).map(function (x) { return (x.name || F.catById(x.category).name) + ' ' + money(x.amount); }).join(', ') + (more > 0 ? ' і ще ' + more : '')) + '</p></li>';
+    }).join('') + '</ul></div></section>';
+  }
   function loansSection() {
     if (!F.state.cfg.loans.length) return '';
     var sm = F.loansSummary(F.todayStr());
@@ -262,7 +275,7 @@
         return '<li><div class="lrow"><span class="name">' + catDot(F.catById(u.rec.category)) + '<b>' + esc(u.rec.name) + '</b></span><span class="lead"></span><span class="val num">' + money(u.rec.amount) + '</span></div><p class="status">' + esc(dayMonthShort(u.date)) + '</p></li>';
       }).join('') + '</ul></div></section>';
     }
-    h += goalsSection() + loansSection();
+    h += plansSection() + goalsSection() + loansSection();
     if (recent.length) {
       h += '<section class="sec"><div class="sec-h"><h2>Останні витрати</h2><button class="btn-text" data-act="tab" data-tab="list">Усі витрати</button></div><div class="panel">' + recent.map(txRowHtml).join('') + '</div></section>';
     }
@@ -393,10 +406,17 @@
     }
     return h + (withNote ? '<p class="note" style="margin-top:10px">Вид обирається у формі витрати. Скан чека визначає його сам. Перелік видів можна змінити в «Бюджет і категорії».</p>' : '') + '</div></section>';
   }
+  function planFactHtml() {
+    var pf = F.planVsFact(ym); if (!pf.items.length) return '';
+    return '<section class="sec"><div class="sec-h"><h2>План і факт</h2><button class="btn-text" data-act="plans">Плани</button></div><div class="panel"><ul class="ledger">' + pf.items.map(function (x) {
+      var pct = x.planned > 0 ? Math.min(100, Math.round(x.spent / x.planned * 100)) : 0;
+      return '<li><span class="lrow"><span class="name">' + catDot(x.cat) + '<b>' + esc(x.cat.name) + '</b></span><span class="lead"></span><span class="val num">' + money(x.spent, true) + ' <small>із ' + money(x.planned) + '</small></span></span><span class="meter' + (x.over ? ' over' : '') + '" role="img" aria-label="Витрачено ' + pct + '% запланованого"><i class="' + (x.cat.colorIdx >= 0 ? 'c' + x.cat.colorIdx : '') + '" style="width:' + pct + '%"></i></span>' + (x.over ? '<span class="status bad">' + ic('alert', 'sm') + 'Перевищено на ' + money(x.spent - x.planned) + '</span>' : '<span class="status">Лишилось ' + money(x.left) + '</span>') + '</li>';
+    }).join('') + '</ul></div></section>';
+  }
   function viewReports() {
     var h = top('Звіти') + monthNav() + seg();
     var total = F.sum(F.monthTxs(ym));
-    if (!total) return h + '<div class="empty"><b>Немає даних за ' + esc(monthName(ym)) + '</b>Додайте витрати або виберіть інший місяць.</div>';
+    if (!total) return h + planFactHtml() + '<div class="empty"><b>Немає даних за ' + esc(monthName(ym)) + '</b>Додайте витрати або виберіть інший місяць.</div>';
     var spent = F.spentByCategory(ym);
     var cats = F.categories().filter(function (c) { return spent[c.id] > 0; }).sort(function (a, b) { return spent[b.id] - spent[a.id]; });
     var mem = F.byMember(ym);
@@ -413,6 +433,7 @@
       h += barRows(cats.map(function (c) { return { id: c.id, name: c.name, value: spent[c.id], cls: c.colorIdx >= 0 ? 'c' + c.colorIdx : '', dot: catDot(c) }; }), total);
     }
     h += '</div></section>';
+    h += planFactHtml();
     if (mem.length > 1) {
       h += '<section class="sec"><div class="sec-h"><h2>Хто скільки витратив</h2></div><div class="panel">';
       if (repMode === 'table') {
@@ -514,6 +535,7 @@
       '<li><button data-act="recurring"><span class="ico">' + ic('repeat') + '</span><span class="grow"><span class="t1">Регулярні платежі</span><span class="t2">' + (S.cfg.recurring.length ? S.cfg.recurring.length + ' ' + plural(S.cfg.recurring.length, 'платіж', 'платежі', 'платежів') : 'Оренда, інтернет, підписки') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="shops"><span class="ico">' + ic('list') + '</span><span class="grow"><span class="t1">Магазини</span><span class="t2">' + (S.cfg.shops.length ? S.cfg.shops.length + ' ' + plural(S.cfg.shops.length, 'магазин', 'магазини', 'магазинів') + ' для швидкого вибору' : 'Додайте свої магазини') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="clubs"><span class="ico">' + ic('users') + '</span><span class="grow"><span class="t1">Гуртки дитини</span><span class="t2">' + (S.cfg.clubs.length ? S.cfg.clubs.length + ' ' + plural(S.cfg.clubs.length, 'гурток', 'гуртки', 'гуртків') + ' для швидкого вибору' : 'Футбол, англійська, танці…') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
+      '<li><button data-act="plans"><span class="ico">' + ic('calendar') + '</span><span class="grow"><span class="t1">Заплановані витрати</span><span class="t2">' + (S.cfg.plans.length ? S.cfg.plans.length + ' ' + plural(S.cfg.plans.length, 'план', 'плани', 'планів') + (F.planGroups(F.todayStr()).filter(function (g) { return !g.past; }).length ? ', найближчий: ' + monthName(F.planGroups(F.todayStr()).filter(function (g) { return !g.past; })[0].ym) : '') : 'Наприклад, подарунки у грудні') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="goals"><span class="ico">' + ic('check') + '</span><span class="grow"><span class="t1">Цілі накопичень</span><span class="t2">' + (S.cfg.goals.length ? S.cfg.goals.length + ' ' + plural(S.cfg.goals.length, 'ціль', 'цілі', 'цілей') : 'Відпустка, резерв, велика покупка') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="loans"><span class="ico">' + ic('repeat') + '</span><span class="grow"><span class="t1">Кредити та картки</span><span class="t2">' + (S.cfg.loans.length ? 'Борг ' + money(F.loansSummary(F.todayStr()).total) : 'Залишок, дата закінчення, переплата') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="cards"><span class="ico">' + ic('card') + '</span><span class="grow"><span class="t1">Кредитки</span><span class="t2">' + (F.cards().length ? (F.cardsSummary().total > 0 ? 'Треба погасити ' + money(F.cardsSummary().total) : 'Боргу немає') : 'Взяли з кредитки й погасили') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
@@ -826,6 +848,26 @@
       '<button class="btn" type="submit">' + (e ? 'Зберегти зміни' : 'Додати ціль') + '</button>' + (e ? '<button type="button" class="btn alt" data-act="goal-cancel">Скасувати зміни</button><button type="button" class="btn danger" data-act="goal-del" data-id="' + esc(e.id) + '">' + ic('trash', 'sm') + 'Видалити ціль</button>' : '') + '</form>';
     openSheet(html, { keepScroll: keep });
   }
+  function openPlans(editId, keep) {
+    var e = editId ? F.planById(editId) : null; var groups = F.planGroups(F.todayStr());
+    var html = sheetTop('Заплановані витрати', 'Запишіть, на що й у якому місяці очікуються великі витрати. Це не витрата, а запас у категорії: у «Звітах» і на головному екрані видно, скільки з плану вже витрачено. Бачить уся родина.') +
+      (groups.length ? groups.map(function (g) {
+        var yr = g.ym.slice(0, 4);
+        return '<h3 style="margin-top:20px;font-size:16px' + (g.past ? ';opacity:.7' : '') + '">' + esc(cap(monthName(g.ym)) + ' ' + yr) + (g.past ? ' (минув)' : '') + ' · ' + esc(money(g.total)) + '</h3>' + g.items.map(function (x) {
+          var c = F.catById(x.category);
+          return '<div class="rec-row"><div class="lrow"><span class="name">' + catDot(c) + '<b>' + esc(x.name || c.name) + '</b></span><span class="lead"></span><span class="val num">' + money(x.amount) + '</span></div>' + (x.name ? '<p class="note" style="margin-top:2px">' + esc(c.name) + '</p>' : '') +
+            '<div class="acts"><button class="btn alt sm" data-act="plan-spend" data-id="' + esc(x.id) + '">' + ic('plus', 'sm') + 'Записати витрату</button><button class="btn alt sm" data-act="plan-edit" data-id="' + esc(x.id) + '">Змінити</button></div></div>';
+        }).join('');
+      }).join('') : '<p class="hint">Планів ще немає.</p>') +
+      '<form data-form="plan" data-id="' + esc(editId || '') + '" novalidate><h3 style="margin-top:22px;font-size:16px">' + (e ? 'Змінити план' : 'Новий план') + '</h3>' +
+      '<label class="field"><span>Назва (за бажанням)</span><input class="in" id="pl-name" maxlength="40" placeholder="Наприклад, Новорічні подарунки" value="' + esc(e ? e.name : '') + '"></label>' +
+      '<div class="row2"><label class="field"><span>Сума, ' + esc(cur()) + '</span><input class="in" id="pl-amount" inputmode="decimal" value="' + (e ? esc(String(e.amount).replace('.', ',')) : '') + '"></label>' +
+      '<label class="field"><span>Місяць</span><input class="in" type="month" id="pl-month" value="' + esc(e ? e.month : curYm) + '"></label></div>' +
+      '<label class="field"><span>Категорія</span><select class="in" id="pl-cat">' + catOptions(e ? e.category : 'gifts') + '</select></label>' +
+      '<p class="note bad" id="pl-err" role="alert" hidden></p><p class="note">Фактичні витрати категорії за цей місяць порівнюються з планом автоматично, окремо позначати нічого не треба.</p>' +
+      '<button class="btn" type="submit">' + (e ? 'Зберегти зміни' : 'Додати план') + '</button>' + (e ? '<button type="button" class="btn alt" data-act="plan-cancel">Скасувати зміни</button><button type="button" class="btn danger" data-act="plan-del" data-id="' + esc(e.id) + '">' + ic('trash', 'sm') + 'Видалити план</button>' : '') + '</form>';
+    openSheet(html, { keepScroll: keep });
+  }
   function openGoalMove(id, sign) {
     var g = F.goalById(id); if (!g) return;
     var html = '<form data-form="goal-move" data-id="' + esc(id) + '" data-s="' + sign + '" novalidate>' + sheetTop(sign > 0 ? 'Внесок: ' + g.name : 'Зняти з цілі: ' + g.name) +
@@ -1094,6 +1136,14 @@
       var top = Object.keys(by).sort(function (a, b) { return by[b] - by[a]; })[0] || 'other'; var d = $('#sp-date').value; var note = $('#sp-note').value;
       closeSheet(); openTx(null, top); $('#tx-amount').value = String(c.total).replace('.', ','); if (d) $('#tx-date').value = d; $('#tx-note').value = note; syncShops();
     },
+    plans: function () { openPlans(); },
+    'plan-edit': function (el) { openPlans(attr(el, 'id'), false); var f = $('#pl-amount'); if (f) f.focus(); },
+    'plan-cancel': function () { openPlans(null, true); },
+    'plan-del': function (el) { if (confirm('Видалити цей план? Уже записані витрати лишаться.')) { F.removePlan(attr(el, 'id')); openPlans(null, true); render(); } },
+    'plan-spend': function (el) {
+      var pl = F.planById(attr(el, 'id')); if (!pl) return; closeSheet(); openTx(null, pl.category);
+      var a = $('#tx-amount'); if (a) a.value = String(pl.amount).replace('.', ','); var n = $('#tx-note'); if (n && pl.name) n.value = pl.name;
+    },
     goals: function () { openGoals(); },
     'goal-edit': function (el) { openGoals(attr(el, 'id'), false); var f = $('#g-name'); if (f) f.focus(); },
     'goal-cancel': function () { openGoals(null, true); },
@@ -1195,6 +1245,10 @@
     } else if (kind === 'shop-add') {
       var tk = attr(form, 'k') || 'shops'; var sr = F.addTag(tk, $('#shop-new').value); if (sr.error) return showErr('shop-err', sr.error);
       openTags(tk, true); render(); var ni = $('#shop-new'); if (ni) ni.focus();
+    } else if (kind === 'plan') {
+      var pid = attr(form, 'id'); var pp = { name: $('#pl-name').value, amount: $('#pl-amount').value, month: $('#pl-month').value, category: $('#pl-cat').value };
+      var pr = pid ? F.updatePlan(pid, pp) : F.addPlan(pp); if (pr.error) return showErr('pl-err', pr.error);
+      openPlans(null, false); render(); toast(pid ? 'План змінено' : 'План додано');
     } else if (kind === 'goal') {
       var gid = attr(form, 'id'); var gp = { name: $('#g-name').value, target: $('#g-target').value, deadline: $('#g-deadline').value };
       var gr = gid ? F.updateGoal(gid, gp) : F.addGoal(gp); if (gr.error) return showErr('g-err', gr.error);

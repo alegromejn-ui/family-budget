@@ -282,6 +282,7 @@
     migrateFunSplit(false);
     migrateSubsV2();
     migrateSubsV3();
+    migrateSubsV4();
   }
 
   // «Розваги й подарунки» розділено на «Розваги», «Подарунки» та «Підписки».
@@ -351,6 +352,16 @@
       if (keep.length !== fun.subs.length) { fun.subs = keep; changed = true; }
     }
     S.meta.mSubsV3 = 1; if (changed) touchCfg(); else save();
+  }
+  // Прибираємо з «Інше» види «Одяг sinsay» та «Позика». Записи лишаються в «Інше» без виду.
+  var OTHER_REMOVE_RE = /^(одяг\s+sinsay|позик[аи])$/i;
+  function migrateSubsV4() {
+    if (S.meta.mSubsV4) return; var changed = false;
+    if (Array.isArray(S.cfg.otherSubs)) {
+      var keep = S.cfg.otherSubs.filter(function (y) { return !OTHER_REMOVE_RE.test(String(y.name).trim()); });
+      if (keep.length !== S.cfg.otherSubs.length) { S.cfg.otherSubs = keep; changed = true; }
+    }
+    S.meta.mSubsV4 = 1; if (changed) touchCfg(); else save();
   }
   // Після завантаження спільних налаштувань зі старого телефона нових категорій там може не бути: повертаємо, якщо на них є записи
   function repairSplitCats() {
@@ -909,6 +920,20 @@
     if (all.length >= 30) return { error: 'Забагато записів. Видаліть непотрібні.' };
     all.push(n); touchCfg(); return { name: n, shop: n };
   }
+  // Перейменування магазину, гуртка чи адреси: нотатки, що починаються зі старої назви, отримують нову, щоб звіти нічого не втратили
+  function renameTag(kind, oldName, name) {
+    var list = S.cfg[kind]; if (!list || list.indexOf(oldName) < 0) return { error: 'Не знайдено.' };
+    var n = cleanShops([name])[0]; if (!n) return { error: 'Введіть назву.' };
+    if (n === oldName) return { name: n, moved: 0 };
+    if (list.some(function (x) { return x !== oldName && x.toLowerCase() === n.toLowerCase(); })) return { error: 'Така назва вже є.' };
+    var moved = 0;
+    Object.keys(S.txs).forEach(function (k) {
+      var t = S.txs[k]; if (tagOf(t, kind) !== oldName) return;
+      t.note = n + String(t.note).trim().slice(oldName.length); t.updatedAt = stamp(t.updatedAt); t.dirty = true; moved++;
+    });
+    S.cfg[kind] = list.map(function (x) { return x === oldName ? n : x; }); touchCfg();
+    return { name: n, moved: moved };
+  }
   function removeTag(kind, name) { S.cfg[kind] = S.cfg[kind].filter(function (x) { return x !== name; }); touchCfg(); }
   function addShop(name) { return addTag('shops', name); }
   function removeShop(name) { removeTag('shops', name); }
@@ -1378,7 +1403,7 @@
     planById: planById, addPlan: addPlan, updatePlan: updatePlan, removePlan: removePlan, planVsFact: planVsFact, planGroups: planGroups, MAX_PLANS: MAX_PLANS,
     goalInfo: goalInfo, addGoal: addGoal, updateGoal: updateGoal, removeGoal: removeGoal, addContribution: addContribution, goalById: goalById,
     loanInfo: loanInfo, loansSummary: loansSummary, addLoan: addLoan, updateLoan: updateLoan, removeLoan: removeLoan, loanById: loanById,
-    shopOf: shopOf, addShop: addShop, removeShop: removeShop, withShop: withShop, byShop: byShop, clubOf: clubOf, tagOf: tagOf, addTag: addTag, removeTag: removeTag, withTag: withTag, byTag: byTag,
+    shopOf: shopOf, addShop: addShop, removeShop: removeShop, withShop: withShop, byShop: byShop, clubOf: clubOf, tagOf: tagOf, addTag: addTag, renameTag: renameTag, removeTag: removeTag, withTag: withTag, byTag: byTag,
     addSplit: addSplit, repeatTx: repeatTx, bulkSetCategory: bulkSetCategory, frequent: frequent, noteSuggestions: noteSuggestions, search: search,
     hasPin: hasPin, setPin: setPin, checkPin: checkPin, removePin: removePin,
     // регулярні
@@ -1388,7 +1413,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v24', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v25', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

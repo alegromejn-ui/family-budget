@@ -606,9 +606,12 @@
     return ['shops', 'clubs', 'places'].map(function (k) {
       var names = F.state.cfg[k] || []; if (!names.length) return '';
       var shown = kind === 'expense' && (k !== 'places' || selId === 'home');
-      return '<div class="tagrow" id="' + TAG_ROW[k][1] + '"' + (shown ? '' : ' hidden') + '><p class="lbl">' + TAG_ROW[k][0] + '</p><div class="quick" role="group" aria-label="' + TAG_ROW[k][0] + '">' + names.map(function (n) {
-        return '<button type="button" class="chip" data-act="shop" data-k="' + k + '" data-s="' + esc(n) + '" aria-pressed="' + (!!t && F.tagOf(t, k) === n) + '">' + esc(n) + '</button>';
-      }).join('') + '</div></div>';
+      return '<div class="tagrow" id="' + TAG_ROW[k][1] + '"' + (shown ? '' : ' hidden') + '><p class="lbl">' + TAG_ROW[k][0] + '</p><div class="quick" role="group" aria-label="' + TAG_ROW[k][0] + '">' + tagChipsHtml(k, t) + '</div></div>';
+    }).join('');
+  }
+  function tagChipsHtml(k, t) {
+    return (F.state.cfg[k] || []).map(function (n) {
+      return '<button type="button" class="chip" data-act="shop" data-k="' + k + '" data-s="' + esc(n) + '" aria-pressed="' + (!!t && F.tagOf(t, k) === n) + '">' + esc(n) + '</button>';
     }).join('');
   }
   function syncShops() {
@@ -629,7 +632,7 @@
   }
   function subRowHtml(kind, selId, t) {
     var cur = t && F.subOf(t) ? F.subOf(t).id : ''; var show = kind === 'expense' && hasSubRow(selId);
-    return '<div class="subrow" id="tx-sub" data-cat="' + esc(selId) + '"' + (show ? '' : ' hidden') + '><p class="lbl">Вид</p><div class="quick" id="tx-sub-chips" role="group" aria-label="Вид витрати">' + subChipsHtml(selId, cur) + '</div>' +
+    return '<div class="subrow" id="tx-sub" data-cat="' + esc(selId) + '"' + (show ? '' : ' hidden') + '><p class="lbl">Вид</p><div class="quick" id="tx-sub-chips" role="group" aria-label="Вид витрати">' + subChipsHtml(selId, cur) + '</div><p class="note" style="margin-top:6px">Утримуйте вид, магазин, гурток чи адресу кілька секунд, щоб перейменувати або видалити.</p>' +
       '<label class="sr" for="tx-sub-own">Свій вид</label><input class="in" id="tx-sub-own" maxlength="30" autocomplete="off" placeholder="Свій вид: що саме це було" style="margin-top:8px"></div>';
   }
   function setSub(id) { var own = $('#tx-sub-own'); if (own && id) own.value = ''; $$('[data-act=sub]').forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 's') === id)); }); }
@@ -1102,6 +1105,63 @@
   }
 
   // ---------- Події ----------
+  // --- Довге натискання на вид, магазин, гурток чи адресу у формі витрати: перейменувати або видалити ---
+  var chipCtx = null, pressTimer = null, pressXY = null, suppressClick = false;
+  var CHIP_LABEL = { sub: 'Вид', shops: 'Магазин', clubs: 'Гурток', places: 'Адреса' };
+  function chipTarget(node) {
+    var b = node && node.closest ? node.closest('button.chip[data-act=sub], button.chip[data-act=shop]') : null;
+    if (!b || !b.closest('form[data-form=tx]')) return null;
+    if (attr(b, 'act') === 'sub') { var s = attr(b, 's'); var w = $('#tx-sub'); if (!s || !w) return null; return { type: 'sub', kind: 'sub', cat: w.getAttribute('data-cat'), id: s, name: b.textContent.trim() }; }
+    return { type: 'tag', kind: attr(b, 'k') || 'shops', name: attr(b, 's') };
+  }
+  function closeChipMenu() { var r = $('#menu-root'); if (r) r.remove(); chipCtx = null; }
+  function openChipMenu(ctx) {
+    closeChipMenu(); chipCtx = ctx; var root = document.createElement('div'); root.id = 'menu-root'; document.body.appendChild(root);
+    root.innerHTML = '<div class="back" data-act="cm-back"><div class="sheet" role="dialog" aria-modal="true">' + sheetTop(CHIP_LABEL[ctx.kind] + ': ' + ctx.name, '', false) +
+      '<div id="cm-body"><button type="button" class="btn" data-act="cm-rename">Перейменувати</button><button type="button" class="btn danger" data-act="cm-del" style="margin-top:8px">Видалити</button><button type="button" class="btn alt" data-act="cm-close" style="margin-top:8px">Скасувати</button></div></div></div>';
+  }
+  function chipRenameForm() {
+    var c = chipCtx; if (!c) return; var body = $('#cm-body'); if (!body) return;
+    body.innerHTML = '<form data-form="cm-rename" novalidate><label class="field"><span>Нова назва</span><input class="in" id="cm-name" maxlength="30" autocomplete="off" value="' + esc(c.name) + '"></label><p class="note bad" id="cm-err" role="alert" hidden></p><button class="btn" type="submit">Зберегти</button><button type="button" class="btn alt" data-act="cm-close" style="margin-top:8px">Скасувати</button></form>';
+    var i = $('#cm-name'); if (i) setTimeout(function () { i.focus(); i.select(); }, 30);
+  }
+  function refreshChipRow(c, curSub) {
+    if (c.type === 'sub') { var w = $('#tx-sub'); if (w && w.getAttribute('data-cat') === c.cat) { var b = $('[data-act=sub][aria-pressed=true]', w); $('#tx-sub-chips').innerHTML = subChipsHtml(c.cat, curSub !== undefined ? curSub : (b ? attr(b, 's') : '')); } return; }
+    var row = $('#' + TAG_ROW[c.kind][1]); if (!row) return; var q = $('.quick', row); if (q) q.innerHTML = tagChipsHtml(c.kind, null);
+    if (!(F.state.cfg[c.kind] || []).length) row.hidden = true; syncShops();
+  }
+  function chipRename(name) {
+    var c = chipCtx; if (!c) return; var err = function (m) { showErr('cm-err', m); }; var r;
+    if (c.type === 'sub') { r = F.renameSub(c.cat, c.id, name); if (r.error) return err(r.error); refreshChipRow(c); toast('Вид перейменовано: ' + r.sub.name, null, null, 3500); }
+    else {
+      var n = $('#tx-note'); var was = !!n && F.tagOf({ note: n.value }, c.kind) === c.name; var rest = was ? n.value.trim().slice(c.name.length) : '';
+      r = F.renameTag(c.kind, c.name, name); if (r.error) return err(r.error);
+      if (was && n) n.value = r.name + rest;
+      refreshChipRow(c); toast('Перейменовано: ' + r.name + (r.moved ? '. Оновлено записів: ' + r.moved : ''), null, null, 4500);
+    }
+    closeChipMenu(); render();
+  }
+  function chipDelete() {
+    var c = chipCtx; if (!c) return;
+    if (!confirm(c.type === 'sub' ? 'Видалити вид «' + c.name + '»? Записи лишаться в категорії без виду.' : 'Видалити «' + c.name + '» зі списку? Старі записи й нотатки лишаться.')) return;
+    if (c.type === 'sub') {
+      var w = $('#tx-sub'); var b = w ? $('[data-act=sub][aria-pressed=true]', w) : null; var wasSel = !!b && attr(b, 's') === c.id;
+      var r = F.removeSub(c.cat, c.id); if (r.error) { closeChipMenu(); return toast(r.error, null, null, 5000); }
+      refreshChipRow(c, wasSel ? '' : undefined); toast('Вид видалено.' + (r.affected ? ' ' + r.affected + ' ' + plural(r.affected, 'запис', 'записи', 'записів') + ' тепер без виду' : ''), null, null, 5000);
+    } else { F.removeTag(c.kind, c.name); refreshChipRow(c); toast('Видалено: ' + c.name, null, null, 3500); }
+    closeChipMenu(); render();
+  }
+  document.addEventListener('pointerdown', function (e) {
+    suppressClick = false; clearTimeout(pressTimer); pressTimer = null; var ctx = chipTarget(e.target); if (!ctx) return;
+    pressXY = [e.clientX, e.clientY];
+    pressTimer = setTimeout(function () { pressTimer = null; suppressClick = true; try { if (navigator.vibrate) navigator.vibrate(15); } catch (x) { /* вібрація недоступна */ } openChipMenu(ctx); }, 550);
+  });
+  document.addEventListener('pointermove', function (e) { if (pressTimer && pressXY && Math.abs(e.clientX - pressXY[0]) + Math.abs(e.clientY - pressXY[1]) > 12) { clearTimeout(pressTimer); pressTimer = null; } });
+  ['pointerup', 'pointercancel'].forEach(function (n) { document.addEventListener(n, function () { clearTimeout(pressTimer); pressTimer = null; }); });
+  document.addEventListener('contextmenu', function (e) {
+    var ctx = chipTarget(e.target); if (!ctx) return; e.preventDefault(); clearTimeout(pressTimer); pressTimer = null;
+    if (!$('#menu-root')) { suppressClick = true; openChipMenu(ctx); }
+  });
   var ACT = {
     tab: function (el) { shopSel = null; setView(attr(el, 'tab')); },
     add: function () { openTx(null); },
@@ -1183,6 +1243,10 @@
     'cat-back': function () { view = catFrom; render(); window.scrollTo(0, scrollBack); },
     edit: function (el) { openTx(attr(el, 'id')); },
     close: function () { closeSheet(); },
+    'cm-back': function (el, e) { if (e.target === el) closeChipMenu(); },
+    'cm-close': function () { closeChipMenu(); },
+    'cm-rename': function () { chipRenameForm(); },
+    'cm-del': function () { chipDelete(); },
     backdrop: function (el, e) { if (e.target === el && !sheetLocked) closeSheet(); },
     month: function (el) { var n = F.addMonths(ym, Number(attr(el, 'd'))); if (n > curYm) return; ym = n; render(); },
     pickmonth: function (el) { ym = attr(el, 'ym'); render(); },
@@ -1231,12 +1295,14 @@
     'import-json': function () { $('#import-file').click(); }
   };
   document.addEventListener('click', function (e) {
+    if (suppressClick && e.target.closest && e.target.closest('button.chip[data-act=sub], button.chip[data-act=shop]')) { suppressClick = false; e.preventDefault(); return; }
     var el = e.target.closest ? e.target.closest('[data-act]') : null; if (!el) return;
     var fn = ACT[attr(el, 'act')]; if (fn) fn(el, e);
   });
 
   document.addEventListener('submit', function (e) {
     var form = e.target; var kind = form.getAttribute('data-form'); if (!kind) return; e.preventDefault();
+    if (kind === 'cm-rename') { chipRename(($('#cm-name') || {}).value || ''); return; }
     if (kind === 'ai') { runAI(($('#ai-q') || {}).value || ''); return; }
     if (kind === 'tx') submitTx(form);
     else if (kind === 'connect') submitConnect();

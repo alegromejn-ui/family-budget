@@ -447,3 +447,7 @@ section + .btn { margin-top: 26px; }
 .seg.full button .ic { width: 16px; height: 16px; flex: none; }
 .payrow .seg { margin-top: 6px; }
 .seg.full + .chips, .chips + .seg.full { margin-top: 4px; }
+
+/* Довге натискання на кнопки видів, магазинів, гуртків і адрес */
+button.chip[data-act="sub"], button.chip[data-act="shop"] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+#menu-root .back { z-index: 60; }

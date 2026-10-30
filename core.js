@@ -92,6 +92,8 @@
   var NEW_SHOPS4 = ['Fozzy', 'EVA'];
   // Старі українські назви: записи з ними й далі рахуються за новим магазином
   var SHOP_RENAME = { 'сільпо': 'Silpo', 'маудау': 'Maudau' };
+  // Адреси для комунальних: де саме платимо (два місця, де живемо, і власна квартира)
+  var DEFAULT_PLACES = ['Єдності', 'Миру', 'Київська'];
   var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'].concat(NEW_SHOPS, NEW_SHOPS3, NEW_SHOPS4);
   function cleanShops(a) {
     var seen = {}, out = [];
@@ -111,7 +113,7 @@
     });
     return out;
   }
-  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], otherSubs: [], cards: defaultCards(), plans: [], updatedAt: 0 }; }
+  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], places: DEFAULT_PLACES.slice(), otherSubs: [], cards: defaultCards(), plans: [], updatedAt: 0 }; }
   function freshState() {
     return {
       v: 1, txs: {}, cfg: defaultCfg(), cfgDirty: false,
@@ -162,6 +164,7 @@
       memberLimits: cleanMap(c.memberLimits, /^.{1,40}$/, 30),
       shops: Array.isArray(c.shops) ? cleanShops(c.shops) : DEFAULT_SHOPS.slice(),
       clubs: cleanShops(c.clubs),
+      places: Array.isArray(c.places) ? cleanShops(c.places) : DEFAULT_PLACES.slice(),
       otherSubs: cleanSubs(c.otherSubs),
       cards: Array.isArray(c.cards) ? cleanCards(c.cards) : defaultCards(),
       plans: cleanPlans(c.plans),
@@ -278,6 +281,7 @@
     }
     migrateFunSplit(false);
     migrateSubsV2();
+    migrateSubsV3();
   }
 
   // «Розваги й подарунки» розділено на «Розваги», «Подарунки» та «Підписки».
@@ -336,6 +340,17 @@
       });
     });
     S.meta.mSubsV2 = 1; if (changed) touchCfg(); else save();
+  }
+  // Прибираємо з «Розваг» види «Gemini» та «Др Єва». Записи з цими видами лишаються в «Розвагах» без виду.
+  var FUN_REMOVE_RE = /^(gemini|д(окто)?р\.?\s*єва|dr\.?\s*eva)$/i;
+  function migrateSubsV3() {
+    if (S.meta.mSubsV3) return; var changed = false;
+    var fun = S.cfg.categories.filter(function (c) { return c.id === 'fun'; })[0];
+    if (fun && Array.isArray(fun.subs)) {
+      var keep = fun.subs.filter(function (y) { return !FUN_REMOVE_RE.test(String(y.name).trim()); });
+      if (keep.length !== fun.subs.length) { fun.subs = keep; changed = true; }
+    }
+    S.meta.mSubsV3 = 1; if (changed) touchCfg(); else save();
   }
   // Після завантаження спільних налаштувань зі старого телефона нових категорій там може не бути: повертаємо, якщо на них є записи
   function repairSplitCats() {
@@ -866,8 +881,8 @@
 
   // ---------- Магазини й гуртки ----------
   // Назва записується на початку нотатки («Кубиха молоко», «Футбол травень»), тому окремого поля на сервері не потрібно.
-  var TAG_KINDS = ['shops', 'clubs'];
-  var TAG_LABEL = { shops: 'магазин', clubs: 'гурток' };
+  var TAG_KINDS = ['shops', 'clubs', 'places'];
+  var TAG_LABEL = { shops: 'магазин', clubs: 'гурток', places: 'адресу' };
   function isWordChar(ch) { return !!ch && /[0-9A-Za-zА-Яа-яІіЇїЄєҐґ]/.test(ch); }
   function matchTag(note, names) {
     note = String(note || '').trim().toLowerCase(); if (!note) return null;
@@ -879,6 +894,8 @@
     return null;
   }
   function tagOf(t, kind) {
+    // Адреса стосується лише комунальних: в інших категоріях початок нотатки з такою назвою не рахуємо
+    if (kind === 'places' && t.category && t.category !== 'home') return null;
     var hit = matchTag(t.note, S.cfg[kind]); if (hit || kind !== 'shops') return hit;
     // запис зі старого телефона: «Сільпо …» рахуємо як Silpo, якщо Silpo є у списку
     var old = matchTag(t.note, Object.keys(SHOP_RENAME)); if (!old) return null;
@@ -898,7 +915,7 @@
   // Нотатка з вибраною назвою: «Кубиха», «Кубиха молоко». Порожня назва прибирає її; замінюється будь-який відомий префікс.
   function withTag(note, name) {
     note = String(note || '').trim();
-    var cur = matchTag(note, S.cfg.shops.concat(S.cfg.clubs, Object.keys(SHOP_RENAME)));
+    var cur = matchTag(note, S.cfg.shops.concat(S.cfg.clubs, S.cfg.places || [], Object.keys(SHOP_RENAME)));
     var rest = cur ? note.slice(cur.length).replace(/^[\s,:;-]+/, '') : note;
     return name ? (rest ? name + ' ' + rest : name) : rest;
   }
@@ -906,6 +923,7 @@
   function byTag(ym, kind) {
     var m = {}, other = { total: 0, count: 0 };
     monthTxs(ym).forEach(function (t) {
+      if (kind === 'places' && t.category !== 'home') return;
       var s = tagOf(t, kind); var o = s ? (m[s] = m[s] || { name: s, total: 0, count: 0 }) : other;
       o.total = round2(o.total + t.amount); o.count++;
     });
@@ -1266,7 +1284,7 @@
       r.categories = Object.keys(sp).sort(function (a, b2) { return sp[b2] - sp[a]; }).map(function (id) { return { name: catById(id).name, sum: sp[id] }; });
       TAG_KINDS.forEach(function (k) {
         var t = byTag(m, k); var items = t.items.map(function (x) { return { name: x.name, sum: x.total, count: x.count }; });
-        if (items.length) r[k === 'shops' ? 'shops' : 'clubs'] = items;
+        if (items.length) r[k === 'shops' ? 'shops' : k === 'clubs' ? 'clubs' : 'utilityAddresses'] = items;
       });
       if (members().length > 1) r.people = byMember(m).map(function (x) { return { name: x.name, sum: x.total }; });
       var pm = byPay(m); if (pm.items.length) r.byCard = pm.items.map(function (x) { return { name: x.name, sum: x.total }; }).concat(pm.none.count && pm.items.length ? [{ name: 'Картку не вказано', sum: pm.none.total }] : []);
@@ -1370,7 +1388,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v23', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v24', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

@@ -309,7 +309,7 @@
     var list = kind === 'expense' ? F.monthTxs(ym) : F.monthKind(ym, kind);
     if (shopSel && kind === 'expense') list = list.filter(function (t) { return F.tagOf(t, shopKind) === shopSel; });
     var h = monthNav(F.sum(list));
-    if (shopSel && kind === 'expense') h += '<div class="found"><span>' + (shopKind === 'clubs' ? 'Гурток' : 'Магазин') + ': <b>' + esc(shopSel) + '</b></span><button class="btn-text" data-act="shop-clear">Показати всі</button></div>';
+    if (shopSel && kind === 'expense') h += '<div class="found"><span>' + (shopKind === 'clubs' ? 'Гурток' : shopKind === 'places' ? 'Адреса' : 'Магазин') + ': <b>' + esc(shopSel) + '</b></span><button class="btn-text" data-act="shop-clear">Показати всі</button></div>';
     if (kind === 'expense' && !shopSel) {
       h += '<div class="chips" role="group" aria-label="Фільтр за категорією"><button class="chip" data-act="filter" data-c="all" aria-pressed="' + (catFilter === 'all') + '">Усі</button>' +
         F.categories().map(function (c) { return '<button class="chip" data-act="filter" data-c="' + esc(c.id) + '" aria-pressed="' + (catFilter === c.id) + '">' + catDot(c) + esc(c.name) + '</button>'; }).join('') + '</div>';
@@ -384,7 +384,7 @@
     var sh = F.byTag(ym, kind); if (!sh.items.length) return '';
     var h = '<section class="sec"><div class="sec-h"><h2>' + title + '</h2></div><div class="panel">';
     if (repMode === 'table') {
-      h += '<table class="t"><thead><tr><th>' + (kind === 'clubs' ? 'Гурток' : 'Магазин') + '</th><th>Сума</th><th>Платежів</th></tr></thead><tbody>' + sh.items.map(function (x) { return '<tr><td>' + esc(x.name) + '</td><td class="num">' + money(x.total) + '</td><td class="num">' + x.count + '</td></tr>'; }).join('') + (sh.other.count ? '<tr><td>' + otherLabel + '</td><td class="num">' + money(sh.other.total) + '</td><td class="num">' + sh.other.count + '</td></tr>' : '') + '</tbody></table>';
+      h += '<table class="t"><thead><tr><th>' + (kind === 'clubs' ? 'Гурток' : kind === 'places' ? 'Адреса' : 'Магазин') + '</th><th>Сума</th><th>Платежів</th></tr></thead><tbody>' + sh.items.map(function (x) { return '<tr><td>' + esc(x.name) + '</td><td class="num">' + money(x.total) + '</td><td class="num">' + x.count + '</td></tr>'; }).join('') + (sh.other.count ? '<tr><td>' + otherLabel + '</td><td class="num">' + money(sh.other.total) + '</td><td class="num">' + sh.other.count + '</td></tr>' : '') + '</tbody></table>';
     } else {
       var rows = sh.items.map(function (x, i) { var k = i % F.MAX_COLORED; return { shop: x.name, tk: kind, name: x.name, value: x.total, cls: 'c' + k, dot: '<i class="dot c' + k + '" aria-hidden="true"></i>' }; });
       if (sh.other.count) rows.push({ name: otherLabel, value: sh.other.total, cls: '', dot: '<i class="dot" aria-hidden="true"></i>' });
@@ -455,6 +455,7 @@
     var shownTypes = 0; cats.forEach(function (c) { if (shownTypes >= 3) return; var x = typesReport(c, shownTypes === 0); if (x) { h += x; shownTypes++; } });
     h += tagReport('shops', 'По магазинах', 'Інші покупки', total, 'Магазин береться з початку нотатки. Додайте його у формі витрати.');
     h += tagReport('clubs', 'По гуртках', 'Решта витрат', total, 'Гурток береться з початку нотатки. Додайте його у формі витрати.');
+    h += tagReport('places', 'Комунальні по адресах', 'Без адреси', total, 'Адреса береться з початку нотатки. Оберіть її у формі витрати для комунальних.');
     h += '<section class="sec"><div class="sec-h"><h2>Останні шість місяців</h2></div><div class="panel">';
     if (repMode === 'table') {
       h += '<table class="t"><thead><tr><th>Місяць</th><th>Витрати</th>' + (budget ? '<th>Бюджет</th>' : '') + '</tr></thead><tbody>' + series.slice().reverse().map(function (s) { return '<tr><td>' + esc(cap(monthName(s.ym))) + ' ' + s.ym.slice(0, 4) + '</td><td class="num">' + money(s.total) + '</td>' + (budget ? '<td class="num">' + money(budget) + '</td>' : '') + '</tr>'; }).join('') + '</tbody></table>';
@@ -535,6 +536,7 @@
       '<li><button data-act="recurring"><span class="ico">' + ic('repeat') + '</span><span class="grow"><span class="t1">Регулярні платежі</span><span class="t2">' + (S.cfg.recurring.length ? S.cfg.recurring.length + ' ' + plural(S.cfg.recurring.length, 'платіж', 'платежі', 'платежів') : 'Оренда, інтернет, підписки') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="shops"><span class="ico">' + ic('list') + '</span><span class="grow"><span class="t1">Магазини</span><span class="t2">' + (S.cfg.shops.length ? S.cfg.shops.length + ' ' + plural(S.cfg.shops.length, 'магазин', 'магазини', 'магазинів') + ' для швидкого вибору' : 'Додайте свої магазини') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="clubs"><span class="ico">' + ic('users') + '</span><span class="grow"><span class="t1">Гуртки дитини</span><span class="t2">' + (S.cfg.clubs.length ? S.cfg.clubs.length + ' ' + plural(S.cfg.clubs.length, 'гурток', 'гуртки', 'гуртків') + ' для швидкого вибору' : 'Футбол, англійська, танці…') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
+      '<li><button data-act="places"><span class="ico">' + ic('list') + '</span><span class="grow"><span class="t1">Адреси для комунальних</span><span class="t2">' + ((S.cfg.places || []).length ? (S.cfg.places || []).join(', ') : 'Додайте адреси, де платите комуналку') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="plans"><span class="ico">' + ic('calendar') + '</span><span class="grow"><span class="t1">Заплановані витрати</span><span class="t2">' + (S.cfg.plans.length ? S.cfg.plans.length + ' ' + plural(S.cfg.plans.length, 'план', 'плани', 'планів') + (F.planGroups(F.todayStr()).filter(function (g) { return !g.past; }).length ? ', найближчий: ' + monthName(F.planGroups(F.todayStr()).filter(function (g) { return !g.past; })[0].ym) : '') : 'Наприклад, подарунки у грудні') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="goals"><span class="ico">' + ic('check') + '</span><span class="grow"><span class="t1">Цілі накопичень</span><span class="t2">' + (S.cfg.goals.length ? S.cfg.goals.length + ' ' + plural(S.cfg.goals.length, 'ціль', 'цілі', 'цілей') : 'Відпустка, резерв, велика покупка') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
       '<li><button data-act="loans"><span class="ico">' + ic('repeat') + '</span><span class="grow"><span class="t1">Кредити та картки</span><span class="t2">' + (S.cfg.loans.length ? 'Борг ' + money(F.loansSummary(F.todayStr()).total) : 'Залишок, дата закінчення, переплата') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
@@ -599,11 +601,12 @@
   // --- Витрата ---
   var CUR_MAP = { UAH: '₴', USD: '$', EUR: '€', PLN: 'zł', GBP: '£', '₴': '₴', '$': '$', '€': '€' };
   var quickList = [];
-  var TAG_ROW = { shops: ['Магазин', 'tx-shops'], clubs: ['Гурток', 'tx-clubs'] };
-  function tagRows(kind, t) {
-    return ['shops', 'clubs'].map(function (k) {
-      var names = F.state.cfg[k]; if (!names.length) return '';
-      return '<div class="tagrow" id="' + TAG_ROW[k][1] + '"' + (kind === 'expense' ? '' : ' hidden') + '><p class="lbl">' + TAG_ROW[k][0] + '</p><div class="quick" role="group" aria-label="' + TAG_ROW[k][0] + '">' + names.map(function (n) {
+  var TAG_ROW = { shops: ['Магазин', 'tx-shops'], clubs: ['Гурток', 'tx-clubs'], places: ['Адреса', 'tx-places'] };
+  function tagRows(kind, t, selId) {
+    return ['shops', 'clubs', 'places'].map(function (k) {
+      var names = F.state.cfg[k] || []; if (!names.length) return '';
+      var shown = kind === 'expense' && (k !== 'places' || selId === 'home');
+      return '<div class="tagrow" id="' + TAG_ROW[k][1] + '"' + (shown ? '' : ' hidden') + '><p class="lbl">' + TAG_ROW[k][0] + '</p><div class="quick" role="group" aria-label="' + TAG_ROW[k][0] + '">' + names.map(function (n) {
         return '<button type="button" class="chip" data-act="shop" data-k="' + k + '" data-s="' + esc(n) + '" aria-pressed="' + (!!t && F.tagOf(t, k) === n) + '">' + esc(n) + '</button>';
       }).join('') + '</div></div>';
     }).join('');
@@ -611,6 +614,13 @@
   function syncShops() {
     var n = $('#tx-note'); if (!n) return;
     $$('[data-act=shop]').forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 's') === F.tagOf({ note: n.value }, attr(b, 'k')))); });
+  }
+  // Рядок «Адреса» показуємо лише для витрат у «Комунальних послугах»
+  function syncPlaces() {
+    var row = $('#tx-places'); if (!row) return; var form = row.closest('form');
+    var k = form ? attr(form, 'kind') : 'expense'; var r = $('input[name=cat]:checked', form || document);
+    var show = k === 'expense' && !!r && r.value === 'home'; row.hidden = !show;
+    if (!show) { var n = $('#tx-note'); if (n && F.tagOf({ note: n.value, category: 'home' }, 'places')) { n.value = F.withTag(n.value, ''); syncShops(); } }
   }
   // Рядок видів є в категорій із видами, у «Інше» та у власних категоріях (там можна вписати свій вид)
   function hasSubRow(catId) { return F.subsOf(catId).length > 0 || catId === 'other' || /^c_/.test(catId); }
@@ -626,6 +636,7 @@
   function subValue() { var w = $('#tx-sub'); if (!w || w.hidden) return ''; var b = $('[data-act=sub][aria-pressed=true]', w); return b ? attr(b, 's') : ''; }
   // Після зміни категорії показуємо її власні види (або ховаємо рядок, якщо їх немає)
   function syncSub() {
+    syncPlaces();
     var w = $('#tx-sub'); if (!w) return; var r = $('input[name=cat]:checked', w.closest('form') || document); var id = r ? r.value : '';
     var form = w.closest('form'); var expense = !form || attr(form, 'kind') !== 'saving' && attr(form, 'kind') !== 'income';
     var has = expense && hasSubRow(id);
@@ -667,7 +678,7 @@
       }).join('') + '</div>' : '') +
       '<div class="catgrid" id="tx-cats" role="radiogroup" aria-label="Категорія">' + catGridHtml(kind, selId, t) + '</div>' +
       subRowHtml(kind, selId, t) +
-      tagRows(kind, t) +
+      tagRows(kind, t, selId) +
       '<div class="row2"><label class="field"><span>Дата</span><input class="in" type="date" id="tx-date" value="' + esc(t ? t.date : F.todayStr()) + '"></label>' +
       '<label class="field"><span>Нотатка</span><input class="in" id="tx-note" maxlength="200" list="note-list" autocomplete="off" placeholder="За бажанням" value="' + esc(t ? t.note : '') + '"></label></div>' +
       '<datalist id="note-list">' + F.noteSuggestions().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
@@ -910,6 +921,7 @@
   // --- Магазини й гуртки ---
   var TAG_TEXT = {
     shops: { title: 'Магазини', sub: 'Їх видно у формі витрати як кнопки, а у звітах витрати групуються за магазином. Магазин записується на початку нотатки.', ph: 'Назва магазину', empty: 'Магазинів ще немає.', del: 'Видалити магазин ' },
+    places: { title: 'Адреси для комунальних', sub: 'Де ми платимо за комуналку. Їх видно у формі витрати для категорії «Комунальні послуги» як кнопки, а у звітах видно, скільки йде на кожну адресу. Адреса записується на початку нотатки.', ph: 'Наприклад, Київська', empty: 'Адрес ще немає. Додайте першу нижче.', del: 'Видалити адресу ' },
     clubs: { title: 'Гуртки', sub: 'Назви гуртків дитини. Їх видно у формі витрати як кнопки, а у звітах видно, скільки йде на кожен. Назва записується на початку нотатки, а категорія ставиться «Діти».', ph: 'Наприклад, Футбол', empty: 'Гуртків ще немає. Додайте перший нижче.', del: 'Видалити гурток ' }
   };
   function openTags(kind, keep) {
@@ -1123,6 +1135,7 @@
     },
     shops: function () { openTags('shops'); },
     clubs: function () { openTags('clubs'); },
+    places: function () { openTags('places'); },
     shop: function (el) {
       var n = $('#tx-note'); var name = attr(el, 's'); var k = attr(el, 'k') || 'shops'; var on = F.tagOf({ note: n.value }, k) === name;
       n.value = F.withTag(n.value, on ? '' : name); if (!on && k === 'clubs') { var kids = $('#cat-kids'); if (kids) kids.checked = true; syncSub(); } syncShops();

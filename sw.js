@@ -1,12 +1,24 @@
 /* Сервісний воркер: додаток відкривається без інтернету.
    Сторінка береться з мережі (щоб оновлення приходили), а коли мережі немає, з кешу.
    Запити до таблиці й до Gemini сюди не потрапляють: вони йдуть на інші адреси. */
-const VERSION = 'family-budget-v26';
+const VERSION = 'family-budget-v28';
 const SHELL = ['./', 'index.html', 'styles.css', 'core.js', 'ui.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2'];
 
+// Відповідь після перенаправлення не можна віддавати як сторінку, тому перед збереженням робимо чисту копію
+function clean(res) {
+  if (!res || !res.redirected) return Promise.resolve(res);
+  return res.blob().then(b => new Response(b, { status: res.status, statusText: res.statusText, headers: res.headers }));
+}
+// Головні файли обов’язкові, решта (шрифти, іконки) зберігається за можливості: одна невдача не ламає офлайн-режим
+const CORE = ['index.html', 'styles.css', 'core.js', 'ui.js'];
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u =>
+    fetch(new Request(u, { cache: 'reload' })).then(clean).then(res => {
+      if (res && res.ok) return c.put(u, res);
+      if (CORE.indexOf(u) >= 0) throw new Error('no ' + u);
+    }).catch(err => { if (CORE.indexOf(u) >= 0) throw err; })
+  ))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -39,7 +51,7 @@ function offlinePage() {
 function navigate(req) {
   const cached = () => caches.match('index.html', { ignoreSearch: true }).then(r => r || caches.match('./', { ignoreSearch: true }));
   const net = fetch(req, { cache: 'no-cache' }).then(res => {
-    if (res && res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put('index.html', copy)); }
+    if (res && res.ok) { clean(res.clone()).then(copy => caches.open(VERSION).then(c => c.put('index.html', copy))); }
     return res;
   });
   const quick = Promise.race([net.catch(() => null), new Promise(r => setTimeout(() => r(null), NAV_WAIT))]);

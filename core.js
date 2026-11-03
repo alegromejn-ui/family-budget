@@ -113,7 +113,7 @@
     });
     return out;
   }
-  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], places: DEFAULT_PLACES.slice(), otherSubs: [], cards: defaultCards(), plans: [], updatedAt: 0 }; }
+  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], places: DEFAULT_PLACES.slice(), otherSubs: [], cards: defaultCards(), plans: [], shopping: [], updatedAt: 0 }; }
   function freshState() {
     return {
       v: 1, txs: {}, cfg: defaultCfg(), cfgDirty: false,
@@ -136,6 +136,20 @@
       var id = String(x.id == null ? '' : x.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24); var amount = parseAmount(x.amount);
       if (!id || ids[id] || amount == null || !/^\d{4}-\d{2}$/.test(String(x.month))) return;
       ids[id] = 1; out.push({ id: id, name: String(x.name == null ? '' : x.name).replace(/\s+/g, ' ').trim().slice(0, 40), amount: amount, category: String(x.category || 'other').slice(0, 40), month: String(x.month) });
+    });
+    return out;
+  }
+  // Список закупок: «макарони, сир…». Це не витрати: у підсумки, звіти й ШІ-аналіз не потрапляє.
+  // Позначили купленим: пункт зникає зі списку (його можна повернути одразу після цього).
+  var MAX_SHOPPING = 200;
+  function cleanShopping(a) {
+    var out = [], ids = {};
+    (Array.isArray(a) ? a : []).forEach(function (x) {
+      if (!x || out.length >= MAX_SHOPPING) return;
+      var id = String(x.id == null ? '' : x.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
+      var name = String(x.name == null ? '' : x.name).replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (!id || ids[id] || !name) return;
+      ids[id] = 1; out.push({ id: id, name: name });
     });
     return out;
   }
@@ -168,6 +182,7 @@
       otherSubs: cleanSubs(c.otherSubs),
       cards: Array.isArray(c.cards) ? cleanCards(c.cards) : defaultCards(),
       plans: cleanPlans(c.plans),
+      shopping: cleanShopping(c.shopping),
       updatedAt: Number(c.updatedAt) || 0
     };
   }
@@ -707,6 +722,24 @@
   function removeGoal(id) { S.cfg.goals = S.cfg.goals.filter(function (g) { return g.id !== id; }); touchCfg(); }
   function addContribution(goalId, amount, date, note) {
     return addTx({ amount: amount, category: 'sv_' + goalId, date: date, note: note || '' });
+  }
+
+  // ---------- Закупки ----------
+  function addShopItems(text) {
+    var names = String(text == null ? '' : text).split(/[\n;]+|,(?!\d)/).map(function (n) { return n.replace(/\s+/g, ' ').trim().slice(0, 60); }).filter(Boolean);
+    if (!names.length) return { error: 'Введіть, що треба купити.' };
+    if (S.cfg.shopping.length + names.length > MAX_SHOPPING) return { error: 'Забагато пунктів (до ' + MAX_SHOPPING + '). Відмітьте куплене.' };
+    names.forEach(function (n) { S.cfg.shopping.push({ id: 'b_' + rid(8), name: n }); });
+    touchCfg(); return { added: names.length };
+  }
+  function removeShopItem(id) {
+    var i = -1; S.cfg.shopping.forEach(function (x, k) { if (x.id === id) i = k; });
+    if (i < 0) return null;
+    var item = S.cfg.shopping.splice(i, 1)[0]; touchCfg(); return { item: item, index: i };
+  }
+  function restoreShopItem(item, index) {
+    if (!item || S.cfg.shopping.some(function (x) { return x.id === item.id; })) return;
+    S.cfg.shopping.splice(Math.max(0, Math.min(index, S.cfg.shopping.length)), 0, item); touchCfg();
   }
 
   // ---------- Заплановані витрати ----------
@@ -1417,13 +1450,14 @@
     addSplit: addSplit, repeatTx: repeatTx, bulkSetCategory: bulkSetCategory, frequent: frequent, noteSuggestions: noteSuggestions, search: search,
     hasPin: hasPin, setPin: setPin, checkPin: checkPin, removePin: removePin,
     // регулярні
+    addShopItems: addShopItems, removeShopItem: removeShopItem, restoreShopItem: restoreShopItem,
     addRecurring: addRecurring, updateRecurring: updateRecurring, removeRecurring: removeRecurring, materializeRecurring: materializeRecurring, upcomingRecurring: upcomingRecurring, dueDate: dueDate,
     // синхронізація
     isConnected: isConnected, syncNow: syncNow, scheduleSync: scheduleSync, dirtyCount: dirtyCount, makeInvite: makeInvite, parseInvite: parseInvite, connect: connect, disconnect: disconnect, validUrl: validUrl,
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v26', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v28', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

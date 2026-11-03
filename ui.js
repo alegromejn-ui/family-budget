@@ -122,7 +122,7 @@
   function txRowHtml(t) {
     var c = F.catInfo(t); var sb = F.subOf(t); var cname = c.name + (sb ? ' · ' + sb.name : ''); var title = t.note || cname;
     var sub = esc((t.note ? cname + ', ' : '') + (t.member || '')); var pi = c.kind === 'expense' ? F.payInfo(F.payOf(t)) : null;
-    if (pi) sub += (sub ? ' · ' : '') + '<i class="paytag ' + pi.id + '">' + esc(pi.short) + '</i>';
+    if (pi) sub += (sub ? ' · ' : '') + '<i class="paytag ' + pi.id + '">' + esc(pi.short + (F.cardOf(t) && F.cardById(F.cardOf(t)) ? ': ' + F.cardById(F.cardOf(t)).name : '')) + '</i>';
     var amt = c.kind === 'income' ? signedMoney(t.amount) : c.kind === 'saving' ? (t.amount < 0 ? 'зняття ' + money(-t.amount) : signedMoney(t.amount)) : c.kind === 'card' ? (t.amount < 0 ? 'погасили ' + money(-t.amount) : 'взяли ' + money(t.amount)) : money(t.amount);
     return '<button class="txrow" data-act="edit" data-id="' + esc(t.id) + '">' + catDot(c) + '<span class="main"><b>' + esc(title) + '</b><span>' + sub + '</span></span><span class="amt num">' + esc(amt) + '</span></button>';
   }
@@ -201,7 +201,7 @@
     if (x.debt > 0.005) parts.push(x.card.limit != null ? 'Доступно ' + money(Math.max(0, x.free)) + ' з ' + money(x.card.limit) : 'Ліміт не вказано');
     else if (x.debt < -0.005) parts.push('Переплата ' + money(-x.debt));
     else parts.push(x.card.limit != null ? 'Боргу немає, ліміт ' + money(x.card.limit) : 'Боргу немає');
-    if (x.last) parts.push((x.last.amount < 0 ? 'погасили ' : 'взяли ') + esc(dayMonthShort(x.last.date)));
+    if (x.last) parts.push((x.last.amount < 0 ? 'погасили ' : F.kindOf(x.last) === 'expense' ? 'остання витрата ' : 'взяли ') + esc(dayMonthShort(x.last.date)));
     return '<span class="status">' + parts.join(', ') + '</span>';
   }
   function cardMeter(x) {
@@ -220,15 +220,18 @@
       }).join('') + '</ul></div></section>';
   }
   function cardHistory(id) {
-    var list = F.cardTxs(id).slice(0, 8); if (!list.length) return '<p class="note">Записів ще немає.</p>';
+    var list = F.cardLedger(id).slice(0, 10); if (!list.length) return '<p class="note">Записів ще немає.</p>';
     return '<ul class="ledger cardhist">' + list.map(function (t) {
-      return '<li><div class="lrow"><span class="name"><span class="hd">' + esc(dayMonthShort(t.date)) + '</span><b>' + esc(t.note || (t.amount < 0 ? 'Погасили' : 'Взяли')) + '</b></span><span class="lead"></span><span class="val num">' + (t.amount < 0 ? '−' : '+') + money(Math.abs(t.amount)) + '</span>' +
-        '<button class="iconbtn" data-act="card-tx-del" data-id="' + esc(t.id) + '" aria-label="Видалити запис від ' + esc(dayMonthShort(t.date)) + '">' + ic('trash', 'sm') + '</button></div>' + (t.member ? '<span class="status">' + esc(t.member) + '</span>' : '') + '</li>';
+      var spend = F.kindOf(t) === 'expense';
+      var title = spend ? (t.note || F.catInfo(t).name) : (t.note || (t.amount < 0 ? 'Погасили' : 'Взяли'));
+      var who = (spend ? 'Витрата' + (t.member ? ', ' : '') : '') + (t.member || '');
+      return '<li><div class="lrow"><span class="name"><span class="hd">' + esc(dayMonthShort(t.date)) + '</span><b>' + esc(title) + '</b></span><span class="lead"></span><span class="val num">' + (t.amount < 0 ? '−' : '+') + money(Math.abs(t.amount)) + '</span>' +
+        (spend ? '' : '<button class="iconbtn" data-act="card-tx-del" data-id="' + esc(t.id) + '" aria-label="Видалити запис від ' + esc(dayMonthShort(t.date)) + '">' + ic('trash', 'sm') + '</button>') + '</div>' + (who ? '<span class="status">' + esc(who) + '</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }
   function openCards(editId, keep) {
     var sm = F.cardsSummary(); var e = editId ? F.cardById(editId) : null;
-    var html = sheetTop('Кредитки', 'Коли берете гроші з кредитки, натисніть «Взяли». Коли гасите із зарплати, натисніть «Погасили». Це не витрати й не доходи: змінюється лише борг, тому бюджет не рахується двічі.') +
+    var html = sheetTop('Кредитки', 'Покупки з кредитки записуйте як звичайні витрати й оберіть кредитку: борг зросте сам. «Взяли» потрібне лише для грошей, які не є витратою (наприклад, зняли готівку). Коли гасите із зарплати, натисніть «Погасили». Це не витрати й не доходи: змінюється лише борг, тому бюджет не рахується двічі.') +
       (sm.items.length ? '<p class="lrow" style="padding:14px 0 0"><span class="name"><b>Треба погасити</b></span><span class="lead"></span><span class="val num">' + money(sm.total) + '</span></p>' + sm.items.map(function (x) {
         return '<div class="rec-row"><div class="lrow"><span class="name"><i class="cico card" aria-hidden="true"><svg class="ic"><use href="#ci-cards"/></svg></i><b>' + esc(x.card.name) + '</b></span><span class="lead"></span><span class="val num">' + money(Math.max(0, x.debt)) + '</span></div>' + cardMeter(x) + cardStatus(x) +
           '<div class="acts wrap"><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="1">' + ic('plus', 'sm') + 'Взяли</button><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="-1">' + ic('check', 'sm') + 'Погасили</button><button class="btn alt sm" data-act="card-debt" data-id="' + esc(x.card.id) + '">Уточнити борг</button><button class="btn alt sm" data-act="card-edit" data-id="' + esc(x.card.id) + '">Змінити</button></div>' +
@@ -243,7 +246,7 @@
   }
   function openCardMove(id, sign) {
     var cd = F.cardById(id); if (!cd) return; var debt = F.cardDebt(id);
-    var html = '<form data-form="card-move" data-id="' + esc(id) + '" data-s="' + sign + '" novalidate>' + sheetTop(sign > 0 ? 'Взяли з кредитки: ' + cd.name : 'Погасили кредитку: ' + cd.name, sign > 0 ? 'Борг зросте на цю суму. На що витратили, записуйте як звичайні витрати.' : 'Борг зменшиться. Це не витрата: гроші пішли на погашення.') +
+    var html = '<form data-form="card-move" data-id="' + esc(id) + '" data-s="' + sign + '" novalidate>' + sheetTop(sign > 0 ? 'Взяли з кредитки: ' + cd.name : 'Погасили кредитку: ' + cd.name, sign > 0 ? 'Борг зросте на цю суму. Покупки тут не записуйте: додайте їх як витрату з цією кредиткою, і борг зросте сам, без дубля.' : 'Борг зменшиться. Це не витрата: гроші пішли на погашення.') +
       '<div class="amount-wrap"><input class="amount-in" id="cm-amount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Сума"><span class="cur">' + esc(cur()) + '</span></div>' +
       (sign < 0 && debt > 0.005 ? '<p class="note"><button type="button" class="btn-text" data-act="card-all" data-v="' + esc(String(debt).replace('.', ',')) + '">Увесь борг: ' + money(debt) + '</button></p>' : '') +
       '<p class="note bad" id="cm-err" role="alert" hidden></p>' +
@@ -657,12 +660,24 @@
     if (!items.some(function (c) { return c.id === selId; })) selId = kind === 'expense' ? 'other' : items[0].id;
     return items.map(function (c) { return '<input type="radio" name="cat" id="cat-' + esc(c.id) + '" value="' + esc(c.id) + '"' + (c.id === selId ? ' checked' : '') + '><label for="cat-' + esc(c.id) + '">' + c.dot + esc(c.name) + '</label>'; }).join('');
   }
-  function payRowHtml(kind, curPay) {
+  function defaultCard() { var last = F.state.meta.lastCard; return last && F.cardById(last) ? last : (F.cards()[0] ? F.cards()[0].id : ''); }
+  function payRowHtml(kind, curPay, curCard, legacy) {
+    var cs = F.cards();
+    var btns = cs.map(function (x) { return '<button type="button" data-act="paycard" data-c="' + esc(x.id) + '" aria-pressed="' + (x.id === curCard) + '">' + esc(x.name) + '</button>'; });
+    if (legacy) btns.push('<button type="button" data-act="paycard" data-c="" aria-pressed="' + (!curCard) + '">Без боргу</button>');
+    var cardRow = '<div id="tx-paycard" style="margin-top:12px"' + (curPay === 'credit' && cs.length ? '' : ' hidden') + '><p class="lbl">Яка кредитка</p><div class="seg full" role="group" aria-label="З якої кредитки заплатили">' + btns.join('') + '</div></div>' +
+      '<p class="note" id="tx-paycard-hint"' + (curPay === 'credit' && !cs.length ? '' : ' hidden') + '>Щоб борг рахувався, додайте кредитку в розділі «Кредитки».</p>';
     return '<div class="payrow" id="tx-pay"' + (kind === 'expense' ? '' : ' hidden') + '><p class="lbl">Картка</p><div class="seg full" role="group" aria-label="З якої картки заплатили">' +
-      F.PAYS.map(function (x) { return '<button type="button" data-act="pay" data-p="' + x.id + '" aria-pressed="' + (x.id === curPay) + '">' + ic('card', 'sm') + esc(x.name) + '</button>'; }).join('') + '</div></div>';
+      F.PAYS.map(function (x) { return '<button type="button" data-act="pay" data-p="' + x.id + '" aria-pressed="' + (x.id === curPay) + '">' + ic('card', 'sm') + esc(x.name) + '</button>'; }).join('') + '</div>' + cardRow + '</div>';
   }
-  function setPay(id) { $$('[data-act=pay]').forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 'p') === id)); }); }
+  function setPay(id) {
+    $$('[data-act=pay]').forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 'p') === id)); });
+    var row = $('#tx-paycard'), hint = $('#tx-paycard-hint'), n = F.cards().length;
+    if (row) row.hidden = !(id === 'credit' && n); if (hint) hint.hidden = !(id === 'credit' && !n);
+  }
   function payValue() { var b = $('[data-act=pay][aria-pressed=true]'); return b ? attr(b, 'p') : ''; }
+  function setPayCard(id) { $$('[data-act=paycard]').forEach(function (b) { b.setAttribute('aria-pressed', String(attr(b, 'c') === id)); }); }
+  function payCardValue() { var b = $('[data-act=paycard][aria-pressed=true]'); return b ? attr(b, 'c') : ''; }
   var TX_TITLE = { expense: ['Нова витрата', 'Редагувати витрату'], income: ['Новий дохід', 'Редагувати дохід'], saving: ['Новий внесок', 'Редагувати внесок'] };
   function openTx(id, preCat) {
     var t = id ? F.state.txs[id] : null; if (id && !t) return;
@@ -670,12 +685,13 @@
     var selId = t ? F.catInfo(t).id : (preCat || F.state.meta.lastCat);
     quickList = t ? [] : F.frequent(5);
     var amountVal = t ? String(t.amount).replace('.', ',') : '';
+    var legacyCard = !!t && F.payOf(t) === 'credit' && !F.cardOf(t); var curCard = t ? (F.cardOf(t) || (legacyCard ? '' : defaultCard())) : defaultCard();
     var html = '<form data-form="tx" data-id="' + esc(id || '') + '" data-kind="' + kind + '" novalidate>' + '<div class="sheet-top"><h2 id="tx-title">' + TX_TITLE[kind][t ? 1 : 0] + '</h2><button type="button" class="x" data-act="close" aria-label="Закрити">' + ic('x') + '</button></div>' +
       (!t && kind !== 'saving' ? '<div class="seg full" role="group" aria-label="Тип запису"><button type="button" data-act="tx-kind" data-k="expense" aria-pressed="' + (kind === 'expense') + '">Витрата</button><button type="button" data-act="tx-kind" data-k="income" aria-pressed="' + (kind === 'income') + '">Дохід</button></div>' : '') +
       '<div class="amount-wrap"><input class="amount-in" id="tx-amount" inputmode="' + (kind === 'saving' ? 'text' : 'decimal') + '" autocomplete="off" placeholder="0" aria-label="Сума" value="' + esc(amountVal) + '"><span class="cur">' + esc(cur()) + '</span></div>' +
       '<p class="note" id="tx-sign"' + (kind === 'saving' ? '' : ' hidden') + '>Мінус означає зняття з цілі, наприклад -500.</p>' +
       '<p class="note bad" id="tx-err" role="alert" hidden></p>' +
-      payRowHtml(kind, t ? F.payOf(t) : (F.state.meta.lastPay || 'main')) +
+      payRowHtml(kind, t ? F.payOf(t) : (F.state.meta.lastPay || 'main'), curCard, legacyCard) +
       (quickList.length ? '<div class="quick" id="tx-quick" role="group" aria-label="Часті витрати"' + (kind === 'expense' ? '' : ' hidden') + '>' + quickList.map(function (q, n) {
         var c = F.catById(q.category); return '<button type="button" class="chip" data-act="quick" data-i="' + n + '">' + catDot(c) + esc((q.note || c.name) + ' ' + money(q.amount)) + '</button>';
       }).join('') + '</div>' : '') +
@@ -695,8 +711,8 @@
     if (!cat) return showErr('tx-err', kind === 'saving' ? 'Спершу створіть ціль у «Ще».' : 'Оберіть категорію.');
     var sub = subValue(); var own = $('#tx-sub-own'); var ownTxt = own && !$('#tx-sub').hidden ? own.value.trim() : '';
     if (ownTxt) { var es = F.ensureSub(cat.value, ownTxt); if (es.error) return showErr('tx-err', es.error); sub = es.sub.id; }
-    var p = { amount: $('#tx-amount').value, category: cat.value, sub: sub, pay: payValue(), date: $('#tx-date').value, note: $('#tx-note').value };
-    var label = function (tx) { var c = F.catInfo(tx); return c.kind === 'income' ? 'Дохід додано: ' + c.name + ', ' + signedMoney(tx.amount) : c.kind === 'saving' ? 'Внесок записано: ' + c.name + ', ' + signedMoney(tx.amount) : 'Додано: ' + c.name + ', ' + money(tx.amount) + (F.payInfo(F.payOf(tx)) ? ' (' + F.payInfo(F.payOf(tx)).name.toLowerCase() + ')' : ''); };
+    var p = { amount: $('#tx-amount').value, category: cat.value, sub: sub, pay: payValue(), card: payCardValue(), date: $('#tx-date').value, note: $('#tx-note').value };
+    var label = function (tx) { var c = F.catInfo(tx); return c.kind === 'income' ? 'Дохід додано: ' + c.name + ', ' + signedMoney(tx.amount) : c.kind === 'saving' ? 'Внесок записано: ' + c.name + ', ' + signedMoney(tx.amount) : 'Додано: ' + c.name + ', ' + money(tx.amount) + (F.payInfo(F.payOf(tx)) ? ' (' + (F.cardOf(tx) && F.cardById(F.cardOf(tx)) ? 'кредитка: ' + F.cardById(F.cardOf(tx)).name : F.payInfo(F.payOf(tx)).name.toLowerCase()) + ')' : ''); };
     if (id) {
       var r = F.updateTx(id, p); if (r.error) return showErr('tx-err', r.error);
       closeSheet(); render(); refreshList(); toast('Зміни збережено', 'Скасувати', function () { F.restoreSnapshot(r.before); render(); });
@@ -727,7 +743,7 @@
     if (rest > 0.009) rows.push(splitRowHtml('Решта чека (знижки, нерозпізнане)', rest, 'other'));
     var c = r.currency ? (CUR_MAP[r.currency.toUpperCase()] || r.currency) : ''; var curWarn = c && c !== cur() ? ' На чеку валюта ' + c + ', а в додатку ' + cur() + ': перевірте суми.' : '';
     var html = '<form data-form="split" novalidate>' + sheetTop('Чек по категоріях', 'Покупки з чека розкладено по категоріях. Перевірте суми й за потреби змініть категорію. Для кожної категорії (і виду) буде записано окрему витрату.' + esc(curWarn)) +
-      payRowHtml('expense', formPay || F.state.meta.lastPay || 'main') +
+      payRowHtml('expense', formPay || F.state.meta.lastPay || 'main', defaultCard(), false) +
       '<div class="row2"><label class="field"><span>Дата</span><input class="in" type="date" id="sp-date" value="' + esc(r.date || formDate || F.todayStr()) + '"></label>' +
       '<label class="field"><span>Магазин</span><input class="in" id="sp-note" maxlength="200" list="note-list" autocomplete="off" placeholder="За бажанням" value="' + esc(r.merchant) + '"></label></div>' +
       '<datalist id="note-list">' + F.noteSuggestions().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
@@ -757,7 +773,7 @@
     var n = order.length; var b = $('#split-save'); if (b) { b.textContent = n ? 'Записати ' + n + ' ' + plural(n, 'витрату', 'витрати', 'витрат') : 'Записати'; b.disabled = !n; }
   }
   function submitSplit() {
-    var rows = splitRows(); var res = F.addSplit({ date: $('#sp-date').value, note: $('#sp-note').value, pay: payValue(), rows: rows.map(function (x) { return { category: x.category, sub: x.sub, amount: x.raw }; }) });
+    var rows = splitRows(); var res = F.addSplit({ date: $('#sp-date').value, note: $('#sp-note').value, pay: payValue(), card: payCardValue(), rows: rows.map(function (x) { return { category: x.category, sub: x.sub, amount: x.raw }; }) });
     if (res.error) return showErr('split-err', res.error);
     var sum = F.round2(res.txs.reduce(function (t, x) { return t + x.amount; }, 0)); var n = res.txs.length; splitCtx = null;
     closeSheet(); render(); toast('Записано ' + n + ' ' + plural(n, 'витрату', 'витрати', 'витрат') + ' на ' + money(sum), 'Скасувати', function () { res.txs.forEach(function (t) { F.setDeleted(t.id, true); }); render(); }, 7000);
@@ -824,7 +840,7 @@
 
   // --- Регулярні платежі ---
   function recText(r) {
-    return money(r.amount) + ' щомісяця, ' + r.day + '-го числа, ' + F.catById(r.category).name + (F.payInfo(r.pay) ? ', ' + F.payInfo(r.pay).name.toLowerCase() : '');
+    return money(r.amount) + ' щомісяця, ' + r.day + '-го числа, ' + F.catById(r.category).name + (F.payInfo(r.pay) ? ', ' + (r.card && F.cardById(r.card) ? 'кредитка ' + F.cardById(r.card).name : F.payInfo(r.pay).name.toLowerCase()) : '');
   }
   function openRecurring(editId, keep) {
     var S = F.state; var e = editId ? S.cfg.recurring.filter(function (r) { return r.id === editId; })[0] : null;
@@ -838,6 +854,7 @@
       '<label class="field"><span>День місяця</span><input class="in" id="rec-day" inputmode="numeric" maxlength="2" placeholder="1-31" value="' + (e ? e.day : '') + '"></label></div>' +
       '<label class="field"><span>Категорія</span><select class="in" id="rec-cat">' + F.categories().map(function (c) { return '<option value="' + esc(c.id) + '"' + ((e ? e.category : 'home') === c.id ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select></label>' +
       '<label class="field"><span>Картка</span><select class="in" id="rec-pay"><option value="">Не вказувати</option>' + F.PAYS.map(function (x) { return '<option value="' + x.id + '"' + (e && e.pay === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label>' +
+      (F.cards().length ? '<label class="field"><span>Яка кредитка (якщо картка кредитна)</span><select class="in" id="rec-card"><option value="">Не вказувати</option>' + F.cards().map(function (x) { return '<option value="' + esc(x.id) + '"' + (e && e.card === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label>' : '') +
       '<p class="note bad" id="rec-err" role="alert" hidden></p>' +
       '<p class="note">' + (e ? 'Зміни діють з наступних платежів, уже записані місяці не змінюються.' : 'Якщо день більший, ніж у місяці днів (наприклад, 31 у квітні), платіж піде в останній день місяця.') + '</p>' +
       '<button class="btn" type="submit">' + (e ? 'Зберегти зміни' : 'Додати платіж') + '</button>' + (e ? '<button type="button" class="btn alt" data-act="rec-cancel">Скасувати зміни</button>' : '') + '</form>';
@@ -1182,7 +1199,7 @@
     },
     quick: function (el) {
       var q = quickList[Number(attr(el, 'i'))]; if (!q) return;
-      $('#tx-amount').value = String(q.amount).replace('.', ','); $('#tx-note').value = q.note; var r = $('#cat-' + q.category); if (r) r.checked = true; syncSub(); setSub(q.sub || ''); if (q.pay) setPay(q.pay); syncShops();
+      $('#tx-amount').value = String(q.amount).replace('.', ','); $('#tx-note').value = q.note; var r = $('#cat-' + q.category); if (r) r.checked = true; syncSub(); setSub(q.sub || ''); if (q.pay) setPay(q.pay); if (q.card && F.cardById(q.card)) setPayCard(q.card); syncShops();
     },
     'repeat-tx': function (el) { var r = F.repeatTx(attr(el, 'id')); if (r.error) return toast(r.error); closeSheet(); render(); refreshList(); toast('Додано на сьогодні', 'Скасувати', function () { F.setDeleted(r.tx.id, true); render(); refreshList(); }); },
     'list-kind': function (el) { shopSel = null; listKind = attr(el, 'k'); catFilter = 'all'; payFilter = 'all'; if (view !== 'list') { view = 'list'; window.scrollTo(0, 0); } render(); },
@@ -1253,6 +1270,7 @@
     filter: function (el) { catFilter = attr(el, 'c'); render(); },
     'pay-filter': function (el) { payFilter = attr(el, 'p'); render(); },
     pay: function (el) { setPay(attr(el, 'p')); },
+    paycard: function (el) { setPayCard(attr(el, 'c')); },
     repmode: function (el) { repMode = attr(el, 'm'); render(); },
     strip: function (el) {
       var d = Number(attr(el, 'd')); var arr = F.dailySeries(curYm); var v = arr[d - 1] || 0;
@@ -1316,7 +1334,7 @@
     } else if (kind === 'cat-add') {
       var r = F.addCategory($('#cat-new').value); if (r.error) return toast(r.error, null, null, 6000); openBudget(true); render();
     } else if (kind === 'rec') {
-      var id = attr(form, 'id'); var p = { name: $('#rec-name').value, amount: $('#rec-amount').value, day: $('#rec-day').value, category: $('#rec-cat').value, pay: $('#rec-pay').value };
+      var id = attr(form, 'id'); var p = { name: $('#rec-name').value, amount: $('#rec-amount').value, day: $('#rec-day').value, category: $('#rec-cat').value, pay: $('#rec-pay').value, card: $('#rec-card') ? $('#rec-card').value : '' };
       var res = id ? F.updateRecurring(id, p) : F.addRecurring(p); if (res.error) return showErr('rec-err', res.error);
       openRecurring(null, false); render(); toast(id ? 'Платіж змінено' : 'Платіж додано');
     } else if (kind === 'split') {

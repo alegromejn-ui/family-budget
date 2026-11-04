@@ -113,10 +113,10 @@
     });
     return out;
   }
-  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], places: DEFAULT_PLACES.slice(), otherSubs: [], cards: defaultCards(), plans: [], shopping: [], updatedAt: 0 }; }
+  function defaultCfg() { return { categories: cloneCats(), budget: null, recurring: [], currency: '₴', goals: [], loans: [], budgets: {}, memberLimits: {}, shops: DEFAULT_SHOPS.slice(), clubs: [], places: DEFAULT_PLACES.slice(), otherSubs: [], cards: defaultCards(), plans: [], shopping: [], shopGone: [], updatedAt: 0 }; }
   function freshState() {
     return {
-      v: 1, txs: {}, cfg: defaultCfg(), cfgDirty: false,
+      v: 1, txs: {}, cfg: defaultCfg(), cfgDirty: false, cfgBase: 0,
       me: { name: '', url: '', code: '', since: 0, lastSync: 0, geminiKey: '', pin: null },
       meta: { created: FB.now(), lastBackup: 0, lastCat: 'food', lastPay: 'main', onboarded: false }
     };
@@ -153,6 +153,24 @@
     });
     return out;
   }
+  // «Куплено» запам'ятовуємо як мітку про видалення, щоб при злитті списків з двох телефонів куплене не поверталося
+  var MAX_GONE = 400, GONE_TTL = 45 * 86400000;
+  function cleanGone(a) {
+    var out = [], ids = {}, lim = FB.now() - GONE_TTL;
+    (Array.isArray(a) ? a : []).forEach(function (x) {
+      if (!x) return; var id = String(x.id == null ? '' : x.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24); var at = Number(x.at) || 0;
+      if (!id || ids[id] || at < lim) return; ids[id] = 1; out.push({ id: id, at: at });
+    });
+    return out.sort(function (a, b) { return b.at - a.at; }).slice(0, MAX_GONE);
+  }
+  function mergeShopping(remote, local) {
+    var gone = {}, goneList = [];
+    (remote.shopGone || []).concat(local.shopGone || []).forEach(function (g) { if (!gone[g.id] || g.at > gone[g.id]) gone[g.id] = g.at; });
+    Object.keys(gone).forEach(function (id) { goneList.push({ id: id, at: gone[id] }); });
+    var seen = {}, items = [];
+    (remote.shopping || []).concat(local.shopping || []).forEach(function (x) { if (!gone[x.id] && !seen[x.id]) { seen[x.id] = 1; items.push({ id: x.id, name: x.name }); } });
+    return { shopping: items.slice(0, MAX_SHOPPING), shopGone: cleanGone(goneList) };
+  }
   function normalizeCfg(c) {
     var d = defaultCfg();
     if (!c || typeof c !== 'object') return d;
@@ -183,6 +201,7 @@
       cards: Array.isArray(c.cards) ? cleanCards(c.cards) : defaultCards(),
       plans: cleanPlans(c.plans),
       shopping: cleanShopping(c.shopping),
+      shopGone: cleanGone(c.shopGone),
       updatedAt: Number(c.updatedAt) || 0
     };
   }
@@ -196,7 +215,7 @@
       });
     }
     s.cfg = normalizeCfg(p.cfg);
-    s.cfgDirty = !!p.cfgDirty;
+    s.cfgDirty = !!p.cfgDirty; s.cfgBase = Number(p.cfgBase) || 0;
     if (p.me) s.me = Object.assign(s.me, { name: String(p.me.name || ''), url: String(p.me.url || ''), code: String(p.me.code || ''), since: Number(p.me.since) || 0, lastSync: Number(p.me.lastSync) || 0, geminiKey: String(p.me.geminiKey || ''), pin: p.me.pin && p.me.pin.hash ? { salt: String(p.me.pin.salt || ''), hash: String(p.me.pin.hash) } : null });
     if (p.meta) s.meta = Object.assign(s.meta, p.meta);
     return s;
@@ -735,10 +754,11 @@
   function removeShopItem(id) {
     var i = -1; S.cfg.shopping.forEach(function (x, k) { if (x.id === id) i = k; });
     if (i < 0) return null;
-    var item = S.cfg.shopping.splice(i, 1)[0]; touchCfg(); return { item: item, index: i };
+    var item = S.cfg.shopping.splice(i, 1)[0]; S.cfg.shopGone = cleanGone([{ id: item.id, at: FB.now() }].concat(S.cfg.shopGone || [])); touchCfg(); return { item: item, index: i };
   }
   function restoreShopItem(item, index) {
     if (!item || S.cfg.shopping.some(function (x) { return x.id === item.id; })) return;
+    S.cfg.shopGone = (S.cfg.shopGone || []).filter(function (g) { return g.id !== item.id; });
     S.cfg.shopping.splice(Math.max(0, Math.min(index, S.cfg.shopping.length)), 0, item); touchCfg();
   }
 
@@ -1092,7 +1112,7 @@
         return { id: t.id, date: t.date, amount: t.amount, category: t.category, cn: t.cn, note: t.note, member: t.member, updatedAt: t.updatedAt, deleted: t.deleted };
       });
       var cfgSent = null;
-      if (S.cfgDirty && S.cfg.updatedAt > 0) cfgSent = { json: JSON.stringify(cfgPayload()), updatedAt: S.cfg.updatedAt };
+      if (S.cfgDirty && S.cfg.updatedAt > 0) cfgSent = { json: JSON.stringify(cfgPayload()), updatedAt: S.cfg.updatedAt, base: S.cfgBase > 0 ? S.cfgBase : undefined };
       var data = await post({ code: S.me.code, action: 'sync', since: S.me.since, changes: changes, config: cfgSent });
       if (!data || data.ok !== true) { var e = new Error('SERVER'); e.code = (data && data.error) || 'SERVER'; throw e; }
 
@@ -1108,10 +1128,18 @@
       // 3. Налаштування сім'ї
       if (data.config && typeof data.config.json === 'string') {
         var remoteU = Number(data.config.updatedAt) || 0;
-        if (!S.cfgDirty || remoteU >= S.cfg.updatedAt) {
-          try { var parsed = JSON.parse(data.config.json); parsed.updatedAt = remoteU; S.cfg = normalizeCfg(parsed); S.cfgDirty = false; repairSplitCats(); } catch (pe) { /* пошкоджені налаштування ігноруємо */ }
-        }
-      } else if (cfgSent && S.cfg.updatedAt === cfgSent.updatedAt) S.cfgDirty = false;
+        try {
+          var parsed = JSON.parse(data.config.json); parsed.updatedAt = remoteU; var remoteCfg = normalizeCfg(parsed);
+          if (!S.cfgDirty) { S.cfg = remoteCfg; S.cfgBase = remoteU; repairSplitCats(); }
+          else {
+            // На сервері вже є чужа версія, а в нас є ще не надіслані правки: список закупок зливаємо, решту бере новіша версія
+            var m = mergeShopping(remoteCfg, S.cfg);
+            var winner = remoteU >= S.cfg.updatedAt ? remoteCfg : S.cfg;
+            S.cfg = Object.assign({}, winner, { shopping: m.shopping, shopGone: m.shopGone, updatedAt: stamp(Math.max(remoteU, S.cfg.updatedAt)) });
+            S.cfgBase = remoteU; S.cfgDirty = true; repairSplitCats();
+          }
+        } catch (pe) { /* пошкоджені налаштування ігноруємо */ }
+      } else if (cfgSent) { S.cfgBase = cfgSent.updatedAt; if (S.cfg.updatedAt === cfgSent.updatedAt) S.cfgDirty = false; }
 
       S.me.since = Number(data.serverTime) || S.me.since; S.me.lastSync = FB.now();
       sync.status = 'ok'; sync.error = '';
@@ -1153,7 +1181,7 @@
       return { error: 'Не вдалося зв’язатися з таблицею. Перевірте інтернет і чи розгорнуто веб-додаток для «Усіх».' };
     }
     if (name != null && String(name).trim()) S.me.name = String(name).trim().slice(0, 40);
-    S.me.since = 0; // перший раз завантажуємо все
+    S.me.since = 0; S.cfgBase = 0; // перший раз завантажуємо все
     Object.keys(S.txs).forEach(function (k) { S.txs[k].dirty = true; }); // власні записи теж підуть у спільну таблицю
     if (S.cfg.updatedAt > 0) S.cfgDirty = true;
     save(); sync.status = 'syncing';
@@ -1457,7 +1485,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v28', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v29', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

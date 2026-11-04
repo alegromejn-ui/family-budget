@@ -1,0 +1,230 @@
+/* Преміальний шар поверх styles.css: глибина, скло, м’яка анімація. Без fx.js усе залишається читабельним. */
+
+:root {
+  --gold: #B8935A; --gold-hi: #E8CC95;
+  --spring: cubic-bezier(.34, 1.4, .64, 1);
+  --ease: cubic-bezier(.22, .8, .2, 1);
+  --paper: #F0F3EF; --wash: #E5EBE7; --line: #DCE3DF;
+  --shadow: 0 0 0 1px rgba(15,29,25,.04), 0 1px 2px rgba(15,29,25,.04), 0 10px 28px -12px rgba(15,29,25,.16);
+  --shadow-lg: 0 0 0 1px rgba(15,29,25,.05), 0 24px 48px -20px rgba(8,38,30,.35);
+  --nav-h: 66px;
+  --hero-a: #06231D; --hero-b: #15604B;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gold: #D4B27A; --gold-hi: #F0DAAE;
+    --paper: #08100D; --sheet: #121B17; --wash: #1A2521; --line: #24312C;
+    --shadow: 0 0 0 1px rgba(255,255,255,.045), 0 14px 30px -16px rgba(0,0,0,.7);
+    --shadow-lg: 0 0 0 1px rgba(255,255,255,.06), 0 28px 56px -20px rgba(0,0,0,.8);
+    --hero-a: #0B2D25; --hero-b: #1B6650;
+  }
+}
+
+html { background: var(--paper); }
+body { background: transparent; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(90% 38% at 85% -6%, color-mix(in srgb, var(--hero-b) 16%, transparent), transparent 70%),
+    radial-gradient(70% 30% at 0% 100%, color-mix(in srgb, var(--gold) 7%, transparent), transparent 70%);
+}
+@media (min-width: 700px) { body { background: transparent; } }
+.num, .amt, .val, .kpi > b { font-variant-numeric: tabular-nums lining-nums; }
+
+/* ---------- Шапка ---------- */
+#app { padding-top: 0; }
+@media (min-width: 700px) { #app { padding-top: 0; } }
+.top {
+  position: sticky; top: 0; z-index: 15;
+  margin: 0 -16px; padding: calc(env(safe-area-inset-top) + 14px) 16px 14px;
+  transition: background-color .25s, box-shadow .25s, backdrop-filter .25s;
+}
+.top h1 { font-size: 30px; letter-spacing: -.035em; transform-origin: left center; transition: transform .3s var(--ease); }
+body.fx-scrolled .top {
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
+  box-shadow: 0 1px 0 var(--line);
+}
+body.fx-scrolled .top h1 { transform: scale(.8); }
+.pill { box-shadow: var(--shadow); border-radius: 18px; }
+
+/* ---------- Головна картка ---------- */
+.hero-card {
+  --mx: 78%; --my: 8%; --rx: 0deg; --ry: 0deg;
+  isolation: isolate; border-radius: 30px; padding: 22px 22px 14px;
+  background:
+    radial-gradient(70% 90% at var(--mx) var(--my), rgba(255,255,255,.17), transparent 62%),
+    radial-gradient(90% 70% at 0% 100%, rgba(0,0,0,.28), transparent 70%),
+    linear-gradient(155deg, var(--hero-a) 0%, color-mix(in srgb, var(--hero-a) 55%, var(--hero-b)) 48%, var(--hero-b) 100%);
+  box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 28px 44px -26px rgba(6,35,29,.75), 0 6px 14px -8px rgba(6,35,29,.4);
+  transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform .5s var(--ease), box-shadow .3s; will-change: transform;
+}
+.hero-card.touch { transition: transform .08s linear; }
+.hero-card::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit; opacity: .09; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.hero-card::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit; padding: 1px;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--gold-hi) 75%, transparent), rgba(255,255,255,.06) 32%, transparent 55%, color-mix(in srgb, var(--gold) 38%, transparent));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.hero-card.bad {
+  background:
+    radial-gradient(70% 90% at var(--mx) var(--my), rgba(255,255,255,.14), transparent 62%),
+    radial-gradient(90% 70% at 0% 100%, rgba(0,0,0,.3), transparent 70%),
+    linear-gradient(155deg, #3E120C 0%, #7A2619 55%, #A63B28 100%);
+  box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 28px 44px -26px rgba(94,26,16,.8), 0 6px 14px -8px rgba(94,26,16,.4);
+}
+.hero-card .hero-line { padding-right: 46px; font-size: 16px; letter-spacing: -.005em; opacity: .9; }
+.hero-card .hero-line .amt { font-size: 54px; font-weight: 700; letter-spacing: -.045em; line-height: 1.04; margin-top: 8px; text-shadow: 0 2px 18px rgba(0,0,0,.18); }
+.hero-card .hero-line .amt .cur-sym { font-size: .46em; font-weight: 500; letter-spacing: 0; margin-left: .14em; opacity: .72; vertical-align: .62em; }
+.hero-card .hero-sub { margin-top: 12px; line-height: 1.45; }
+.hero-card .btn-text { background: rgba(255,255,255,.12); box-shadow: 0 0 0 1px rgba(255,255,255,.14) inset; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.hero-meter { height: 6px; background: rgba(255,255,255,.14); box-shadow: inset 0 1px 2px rgba(0,0,0,.25); }
+.hero-meter i { background: linear-gradient(90deg, rgba(255,255,255,.7), #fff); box-shadow: 0 0 14px rgba(255,255,255,.55); }
+.hero-card.bad .hero-meter i { background: linear-gradient(90deg, #FFC2B5, #FFE3DC); box-shadow: 0 0 14px rgba(255,190,175,.6); }
+.hero-card .strip { margin-top: 18px; touch-action: pan-y; position: relative; }
+.hero-card .strip svg { height: 52px; }
+.hero-card .strip rect { transition: fill .18s; }
+.hero-card .strip rect.bar, .hero-card .strip rect.today { filter: drop-shadow(0 2px 5px rgba(0,0,0,.18)); }
+.hero-card .strip rect.today { fill: #fff; }
+.hero-card .strip rect.pick, .hero-card .strip rect.today.pick { fill: var(--gold-hi); }
+
+.fx-eye {
+  position: absolute; top: 14px; right: 14px; width: 38px; height: 38px; border-radius: 19px; display: grid; place-items: center; color: #fff;
+  background: rgba(255,255,255,.12); box-shadow: 0 0 0 1px rgba(255,255,255,.16) inset; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: transform .25s var(--spring), background .2s; z-index: 2;
+}
+.fx-eye:active { transform: scale(.88); }
+.fx-eye svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.fx-eye .off { display: none; }
+body.fx-hide .fx-eye .on { display: none; } body.fx-hide .fx-eye .off { display: block; }
+.fx-tip {
+  position: absolute; bottom: calc(100% - 8px); transform: translate(-50%, 6px) scale(.9); opacity: 0; pointer-events: none;
+  padding: 5px 10px; border-radius: 10px; font-size: 12.5px; font-weight: 650; white-space: nowrap; color: #14201B;
+  background: linear-gradient(180deg, #fff, #F1E6D0); box-shadow: 0 6px 16px -4px rgba(0,0,0,.4);
+  transition: opacity .15s, transform .25s var(--spring), left .12s var(--ease);
+}
+.fx-tip.on { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.fx-tip::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; margin-left: -4px; transform: rotate(45deg); background: #F1E6D0; border-radius: 2px; }
+
+body.fx-hide .hero-card .amt, body.fx-hide .hero-meta, body.fx-hide .kpi > b, body.fx-hide .panel .val, body.fx-hide .panel .amt,
+body.fx-hide .month-nav .label span, body.fx-hide .hero-sub, body.fx-hide .strip .read { filter: blur(9px); transition: filter .3s; user-select: none; }
+
+/* ---------- Панелі, картки, значки ---------- */
+.panel { border-radius: 24px; padding: 6px 18px; background: linear-gradient(180deg, color-mix(in srgb, var(--sheet) 100%, #fff 0%), var(--sheet)); }
+.kpi { border-radius: 22px; background: linear-gradient(165deg, var(--sheet), color-mix(in srgb, var(--sheet) 94%, var(--wash))); }
+.kpi.big > b { font-size: 34px; letter-spacing: -.035em; }
+.sec-h h2 { font-size: 20px; letter-spacing: -.02em; }
+.sec-h .btn-text { background: color-mix(in srgb, var(--accent) 11%, var(--sheet)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent) inset; }
+.cico { background: linear-gradient(150deg, color-mix(in srgb, var(--cc) 24%, var(--sheet)), color-mix(in srgb, var(--cc) 9%, var(--sheet))); box-shadow: 0 0 0 1px color-mix(in srgb, var(--cc) 16%, transparent) inset, 0 3px 8px -4px color-mix(in srgb, var(--cc) 55%, transparent); }
+.meter { height: 8px; background: color-mix(in srgb, var(--wash) 90%, var(--ink) 4%); box-shadow: inset 0 1px 2px rgba(0,0,0,.07); }
+.meter i { box-shadow: inset 0 1px 0 rgba(255,255,255,.38), 0 0 10px -2px currentColor; }
+.hbar .track { height: 10px; border-radius: 5px; }
+.hbar .track i { box-shadow: inset 0 1px 0 rgba(255,255,255,.35); }
+.chip { border-radius: 22px; }
+.chip[aria-pressed="true"], .chip.on { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent) inset, var(--shadow); }
+.seg { background: color-mix(in srgb, var(--wash) 92%, var(--ink) 3%); box-shadow: inset 0 1px 2px rgba(0,0,0,.06); }
+.seg button { transition: color .2s, background-color .25s, box-shadow .25s; }
+.btn { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent)); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset, 0 12px 22px -12px color-mix(in srgb, var(--accent) 80%, transparent); }
+.btn.alt, .btn.danger { background: var(--wash); box-shadow: none; }
+.btn.danger { background: transparent; }
+.in:not(.kpi) { background: color-mix(in srgb, var(--paper) 70%, var(--sheet)); }
+.kpi { border: 0; }
+
+/* Живий відгук на дотик */
+.txrow, .catlink, .chip, .btn, .buy-item, .menu button, .kpi, .btn-text, .seg button, .pill, .iconbtn, .x, .keypad button, .catgrid label {
+  transition: transform .35s var(--spring), background-color .2s, box-shadow .25s, border-color .2s, opacity .2s;
+}
+.txrow:active, .catlink:active, .buy-item:active, .menu button:active { transform: scale(.975); background-color: color-mix(in srgb, var(--accent) 6%, transparent); }
+.chip:active, .btn:active, .btn-text:active, .seg button:active, .catgrid label:active, .keypad button:active { transform: scale(.94); }
+.catlink:active { opacity: 1; }
+.txrow, .catlink, .buy-item, .menu button { border-radius: 14px; }
+@media (hover: hover) { .txrow:hover, .catlink:hover, .menu button:hover { background-color: color-mix(in srgb, var(--accent) 5%, transparent); } }
+
+/* ---------- Нижня панель: плаваюча скляна капсула ---------- */
+#tabs {
+  left: 50%; right: auto; width: min(560px, calc(100% - 24px)); transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 10px); padding-bottom: 0; border-radius: 28px; border: 0;
+  background: color-mix(in srgb, var(--sheet) 72%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(1.7); backdrop-filter: blur(26px) saturate(1.7);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 7%, transparent), 0 1px 0 rgba(255,255,255,.5) inset, 0 22px 40px -16px rgba(8,38,30,.45);
+}
+@media (prefers-color-scheme: dark) { #tabs { box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 1px 0 rgba(255,255,255,.06) inset, 0 22px 40px -14px rgba(0,0,0,.75); } }
+#tabs .in-row { position: relative; max-width: none; }
+#app { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 44px); }
+#toast { bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 28px); }
+#tabs button.tab { position: relative; z-index: 1; transition: color .25s; }
+#tabs button.tab .ic { background: transparent !important; transition: transform .4s var(--spring); }
+#tabs button.tab[aria-current="page"] .ic { transform: translateY(-1px) scale(1.08); }
+#tabs button.tab:active .ic { transform: scale(.86); }
+.fx-ind { position: absolute; z-index: 0; top: 0; left: 0; width: 52px; height: 28px; border-radius: 14px; pointer-events: none; opacity: 0;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent) inset;
+  transition: transform .5s var(--spring), opacity .2s; }
+.fx-ind.ready { opacity: 1; }
+.fx-ind.snap { transition: opacity .2s; }
+#tabs .fab {
+  margin-top: -30px; width: 60px; height: 60px; border-radius: 30px;
+  background: radial-gradient(80% 80% at 30% 20%, rgba(255,255,255,.28), transparent 60%), linear-gradient(155deg, #0A3A2F, #1B6B53);
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px color-mix(in srgb, var(--gold) 70%, transparent), 0 16px 26px -10px rgba(8,50,40,.75);
+  transition: transform .45s var(--spring), box-shadow .3s;
+}
+#tabs .fab .ic { transition: transform .5s var(--spring); }
+#tabs .fab:active { transform: scale(.9); }
+#tabs .fab:active .ic { transform: rotate(90deg); }
+@media (prefers-color-scheme: dark) { #tabs .fab { background: radial-gradient(80% 80% at 30% 20%, rgba(255,255,255,.35), transparent 60%), linear-gradient(155deg, #2BAE8A, #4FD1A8); color: #04201A; } }
+
+/* ---------- Аркуші ---------- */
+.back { background: rgba(5,12,10,.42); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: fx-fade .25s ease-out; transition: background-color .2s; }
+.sheet { border-radius: 30px 30px 0 0; box-shadow: 0 -20px 60px -20px rgba(0,0,0,.45); animation: fx-rise .45s var(--ease); will-change: transform; }
+.sheet::before { display: none; }
+.sheet.dragging { transition: none; animation: none; }
+.sheet.settle { transition: transform .4s var(--spring); }
+.fx-grab { height: 26px; margin: -10px -20px 0; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.fx-grab::before { content: ''; width: 42px; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 18%, transparent); transition: width .25s var(--spring), background .2s; }
+.sheet.dragging .fx-grab::before { width: 56px; background: color-mix(in srgb, var(--ink) 32%, transparent); }
+.sheet-top { touch-action: none; }
+@keyframes fx-fade { from { opacity: 0; } }
+@keyframes fx-rise { from { transform: translateY(70px); opacity: 0; } }
+.amount-wrap { background: color-mix(in srgb, var(--paper) 80%, var(--sheet)); box-shadow: inset 0 1px 3px rgba(0,0,0,.06); }
+.amount-in { font-weight: 700; letter-spacing: -.04em; }
+.catgrid input:checked + label { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent) inset, 0 6px 14px -8px var(--accent); }
+
+/* ---------- Повідомлення ---------- */
+.toast {
+  background: color-mix(in srgb, var(--ink) 92%, transparent); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border-radius: 18px; box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 20px 36px -14px rgba(0,0,0,.55);
+  animation: fx-toast .5s var(--spring);
+}
+@keyframes fx-toast { from { transform: translateY(24px) scale(.94); opacity: 0; } }
+
+/* ---------- Закупки ---------- */
+.buy-box { transition: background .25s, border-color .25s, color .2s, transform .4s var(--spring); }
+.buy-box.fx-pop { animation: fx-pop .55s var(--spring); }
+@keyframes fx-pop { 0% { transform: scale(.7); } 55% { transform: scale(1.22); } 100% { transform: scale(1); } }
+.buy-item.done .buy-box { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* ---------- Звіти ---------- */
+.cols .col { transition: fill .25s; }
+.cols .col.sel { filter: drop-shadow(0 4px 8px color-mix(in srgb, var(--accent) 45%, transparent)); }
+.cols svg rect.col { transform-box: fill-box; transform-origin: bottom; }
+
+/* ---------- Замок ---------- */
+#lock { background: radial-gradient(90% 50% at 50% 0%, color-mix(in srgb, var(--hero-b) 22%, transparent), transparent 70%), var(--paper); }
+.keypad button { border-radius: 22px; min-height: 68px; background: color-mix(in srgb, var(--sheet) 88%, transparent); box-shadow: var(--shadow); }
+.lock-in .dots i { width: 14px; height: 14px; border-width: 1.5px; transition: background .15s, transform .3s var(--spring); }
+.lock-in .dots i.on { transform: scale(1.18); background: var(--accent); border-color: var(--accent); }
+.fx-shake { animation: fx-shake .45s; }
+@keyframes fx-shake { 20%, 60% { transform: translateX(-9px); } 40%, 80% { transform: translateX(9px); } }
+
+/* ---------- Рух вимкнено, якщо людина так налаштувала ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .hero-card, .hero-card.touch { transform: none !important; transition: none; }
+  .fx-ind, .buy-box, .sheet, .back, .toast, .fx-tip, #tabs .fab, #tabs button.tab .ic { transition: none !important; animation: none !important; }
+  .top h1 { transition: none; }
+}
+
+/* Коли аркуш лише перемальовується (наприклад, після зміни в ньому), анімацію появи не повторюємо */
+.back.fx-still, .back.fx-still .sheet { animation: none !important; }

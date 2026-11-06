@@ -1234,20 +1234,39 @@
     try { var o = JSON.parse(raw); var em = o && o.error; var m = em && (em.message || em.status); if (m) return String(m).slice(0, 300); } catch (e2) { /* не JSON */ }
     return raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
   }
-  async function geminiRequest(payload) {
+  // Для швидкого розпізнавання вимикаємо «роздуми» моделі: саме вони найдовше й затримують відповідь.
+  function withFastThinking(payload, model) {
+    var p = JSON.parse(JSON.stringify(payload)); p.generationConfig = p.generationConfig || {};
+    p.generationConfig.thinkingConfig = /2\.5/.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' };
+    return p;
+  }
+  var MODEL_PREF_KEY = 'fb_gemini_model';
+  function modelOrder() {
+    var pref = ''; try { pref = localStorage.getItem(MODEL_PREF_KEY) || ''; } catch (e) { /* ignore */ }
+    return pref && GEMINI_MODELS.indexOf(pref) >= 0 ? [pref].concat(GEMINI_MODELS.filter(function (m) { return m !== pref; })) : GEMINI_MODELS.slice();
+  }
+  async function geminiRequest(payload, opts) {
+    opts = opts || {};
     var apiKey = geminiKey();
     if (!apiKey) { var e0 = new Error('NO_KEY'); e0.code = 'NO_KEY'; throw e0; }
     var delays = FB.geminiDelays; var used = 0; var lastErr = null; var softErr = null;
+    var models = modelOrder();
     // Повтори (пауза між ними) спільні для всіх моделей: перевантажена модель не змушує чекати кілька разів поспіль.
-    for (var mi = 0; mi < GEMINI_MODELS.length; mi++) {
-      var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODELS[mi] + ':generateContent';
+    for (var mi = 0; mi < models.length; mi++) {
+      var model = models[mi];
+      var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent';
+      var body = JSON.stringify(opts.fast ? withFastThinking(payload, model) : payload); var triedPlain = !opts.fast;
       for (;;) {
-        var res;
-        try { res = await FB.fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, body: JSON.stringify(payload) }); }
-        catch (ne) { lastErr = softErr = new Error('NETWORK'); lastErr.code = 'NETWORK'; if (used >= delays.length) break; await sleep(delays[used++]); continue; }
-        if (res.ok) return res.json();
+        var res; var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timer = ctl ? setTimeout(function () { ctl.abort(); }, opts.timeoutMs || 30000) : null;
+        try { res = await FB.fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, body: body, signal: ctl ? ctl.signal : undefined }); }
+        catch (ne) { if (timer) clearTimeout(timer); lastErr = softErr = new Error('NETWORK'); lastErr.code = 'NETWORK'; if (used >= delays.length) break; await sleep(delays[used++]); continue; }
+        if (timer) clearTimeout(timer);
+        if (res.ok) { try { localStorage.setItem(MODEL_PREF_KEY, model); } catch (e3) { /* ignore */ } return res.json(); }
         lastErr = new Error('HTTP ' + res.status); lastErr.code = 'HTTP_' + res.status; lastErr.status = res.status;
-        lastErr.model = GEMINI_MODELS[mi]; lastErr.detail = await errorDetail(res);
+        lastErr.model = model; lastErr.detail = await errorDetail(res);
+        // Модель не знає параметр «роздумів»: пробуємо ту саму модель без нього.
+        if (res.status === 400 && !triedPlain && /thinking/i.test(lastErr.detail)) { triedPlain = true; body = JSON.stringify(payload); continue; }
         if (res.status === 404) break;
         if (res.status === 429 || res.status >= 500) { softErr = lastErr; if (used >= delays.length) break; await sleep(delays[used++]); continue; }
         throw lastErr;
@@ -1426,7 +1445,7 @@
   }
   async function scanReceipt(file) {
     var b64 = await FB.prepareImage(file);
-    return readReceiptResponse(await geminiRequest(receiptPayload(b64, 'image/jpeg')));
+    return readReceiptResponse(await geminiRequest(receiptPayload(b64, 'image/jpeg'), { fast: true }));
   }
 
 
@@ -1485,7 +1504,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v29', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v30', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

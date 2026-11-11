@@ -618,6 +618,25 @@
   function catSeries(id, endYm, n) {
     var out = []; for (var i = n - 1; i >= 0; i--) { var m = addMonths(endYm, -i); out.push({ ym: m, total: sum(catMonthTxs(m, id)) }); } return out;
   }
+  // Візити: витрати з одного чека складаємо в один запис із загальною сумою. Рядки одного чека мають однакові дату, нотатку,
+  // людину й картку та створюються разом (час створення зашито в id і не змінюється при редагуванні). Кожна категорія з видом
+  // у чеку трапляється раз. Записи без нотатки не групуємо. Дані не змінюються, тож це працює й для старих чеків.
+  var VISIT_GAP_MS = 5000;
+  function createdAt(t) { var n = parseInt(String(t.id || '').slice(2, -4), 36); return /^t_/.test(t.id) && n > 1e12 && n < 4e12 ? n : NaN; }
+  function visits(list) {
+    var out = [], open = {};
+    list.forEach(function (t) {
+      var note = (t.note || '').trim();
+      if (!note) { out.push({ txs: [t], date: t.date, note: '', total: t.amount, parts: {} }); return; }
+      var base = t.date + '|' + note.toLowerCase() + '|' + (t.member || '') + '|' + payOfCn(t.cn) + '|' + cardOfCn(t.cn);
+      var part = t.category + '|' + subIdOfCn(t.cn); var at = createdAt(t);
+      var g = (open[base] || []).filter(function (x) { return !x.parts[part] && (isNaN(at) || isNaN(x.at) || Math.abs(at - x.at) <= VISIT_GAP_MS); })[0];
+      if (!g) { g = { txs: [], parts: {}, date: t.date, note: note, total: 0, at: at }; (open[base] = open[base] || []).push(g); out.push(g); }
+      g.txs.push(t); g.parts[part] = 1; g.total = round2(g.total + t.amount);
+    });
+    out.forEach(function (g) { g.txs.sort(function (a, b) { return b.amount - a.amount; }); });
+    return out;
+  }
   // «На що пішло»: однакові нотатки (без урахування регістру) складаємо разом
   function groupByNote(list) {
     var g = {}; var order = [];
@@ -1494,7 +1513,7 @@
     goalInfo: goalInfo, addGoal: addGoal, updateGoal: updateGoal, removeGoal: removeGoal, addContribution: addContribution, goalById: goalById,
     loanInfo: loanInfo, loansSummary: loansSummary, addLoan: addLoan, updateLoan: updateLoan, removeLoan: removeLoan, loanById: loanById,
     shopOf: shopOf, addShop: addShop, removeShop: removeShop, withShop: withShop, byShop: byShop, clubOf: clubOf, tagOf: tagOf, addTag: addTag, renameTag: renameTag, removeTag: removeTag, withTag: withTag, byTag: byTag,
-    addSplit: addSplit, repeatTx: repeatTx, bulkSetCategory: bulkSetCategory, frequent: frequent, noteSuggestions: noteSuggestions, search: search,
+    addSplit: addSplit, visits: visits, repeatTx: repeatTx, bulkSetCategory: bulkSetCategory, frequent: frequent, noteSuggestions: noteSuggestions, search: search,
     hasPin: hasPin, setPin: setPin, checkPin: checkPin, removePin: removePin,
     // регулярні
     addShopItems: addShopItems, removeShopItem: removeShopItem, restoreShopItem: restoreShopItem,
@@ -1504,7 +1523,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v30', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v31', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

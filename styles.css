@@ -465,3 +465,12 @@ button.chip[data-act="sub"], button.chip[data-act="shop"] { -webkit-touch-callou
 .buy-item.done .buy-box { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .buy-item.done span { color: var(--ink2); text-decoration: line-through; }
 @media (max-width: 360px) { #tabs button.tab { font-size: 11px; } }
+
+/* Список «За чеками»: один рядок на візит, деталізація розкривається */
+.visit-wrap + .visit-wrap, .visit-wrap + .txrow, .txrow + .visit-wrap { border-top: 1px solid var(--wash); }
+.txrow.visit .chev { flex: none; color: var(--ink2); transition: transform .2s; }
+.txrow.visit[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.visit-body { margin: 0 0 8px 20px; padding-left: 10px; border-left: 2px solid var(--wash); }
+.visit-body .txrow { min-height: 52px; }
+.visit-body .txrow .cico { width: 34px; height: 34px; border-radius: 11px; }
+.visit-body .txrow .cico .ic { width: 17px; height: 17px; }

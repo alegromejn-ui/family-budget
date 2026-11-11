@@ -1,0 +1,71 @@
+/* Значки магазинів, «Магазини місяця», кольорові чипи й дотики. Без цього файлу застосунок працює як раніше. */
+
+.bico { --b1: #8A9993; --b2: #5F6F69; --bf: #fff; flex: none; position: relative; display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; font-style: normal; color: var(--bf); overflow: hidden;
+  background: linear-gradient(145deg, var(--b1), var(--b2)); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -6px 10px rgba(0,0,0,.12), 0 4px 10px -4px color-mix(in srgb, var(--b2) 70%, transparent); transition: transform .35s var(--spring, cubic-bezier(.34,1.4,.64,1)); }
+.bico::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 80% at 0% 0%, rgba(255,255,255,.32), transparent 55%); pointer-events: none; }
+.bico b { position: relative; z-index: 1; font-weight: 800; font-size: 19px; line-height: 1; letter-spacing: -.02em; }
+.bico.l2 b { font-size: 15px; } .bico.l3 b { font-size: 12.5px; letter-spacing: -.03em; }
+.bico.gen b { font-weight: 700; }
+.bico.sm { width: 26px; height: 26px; border-radius: 9px; margin-left: -6px; }
+.bico.sm b { font-size: 13px; } .bico.sm.l2 b { font-size: 10.5px; } .bico.sm.l3 b { font-size: 8.5px; }
+.bico.lg { width: 46px; height: 46px; border-radius: 15px; }
+.lrow .name .bico.sm { margin-left: 0; width: 28px; height: 28px; }
+.shop-row .bico, .hbar .bico { width: 30px; height: 30px; border-radius: 10px; }
+.hbar .bico b, .shop-row .bico b { font-size: 14px; } .hbar .bico.l2 b, .shop-row .bico.l2 b { font-size: 11.5px; } .hbar .bico.l3 b, .shop-row .bico.l3 b { font-size: 9.5px; }
+.lrow .name { gap: 10px; }
+.found .bico { margin: 0 8px 0 0; vertical-align: middle; }
+
+/* Значок магазину у списку витрат + маленька піктограма категорії в куті */
+.bwrap { position: relative; flex: none; display: inline-block; width: 42px; height: 42px; }
+.bwrap .bico { width: 42px; height: 42px; }
+.cmini { --cc: var(--cn); position: absolute; right: -5px; bottom: -5px; width: 19px; height: 19px; border-radius: 7px; display: grid; place-items: center; font-style: normal;
+  color: #fff; background: var(--cc); border: 2px solid var(--sheet); box-sizing: content-box; margin: 0; }
+.cmini .ic { width: 11px; height: 11px; stroke-width: 2.6; }
+.cmini.c0 { --cc: var(--c0); } .cmini.c1 { --cc: var(--c1); } .cmini.c2 { --cc: var(--c2); } .cmini.c3 { --cc: var(--c3); } .cmini.c4 { --cc: var(--c4); } .cmini.c5 { --cc: var(--c5); }
+.cmini.c6 { --cc: var(--c6); } .cmini.c7 { --cc: var(--c7); } .cmini.c8 { --cc: var(--c8); } .cmini.c9 { --cc: var(--c9); } .cmini.c10 { --cc: var(--c10); } .cmini.c11 { --cc: var(--c11); }
+.cmini.c12 { --cc: var(--c12); } .cmini.c13 { --cc: var(--c13); } .cmini.c14 { --cc: var(--c14); } .cmini.c15 { --cc: var(--c15); }
+.cmini.inc { --cc: var(--accent); } .cmini.sav { --cc: var(--c6); } .cmini.card { --cc: var(--warn); }
+.txrow:active .bico, .txrow:active .cico { transform: scale(.92) rotate(-3deg); }
+.txrow .cico { transition: transform .35s var(--spring, cubic-bezier(.34,1.4,.64,1)); }
+@media (hover: hover) { .txrow:hover .bico, .catlink:hover .cico { transform: scale(1.07) rotate(-4deg); } }
+
+/* Чипи: вибраний підсвічується кольором (бренду або акценту) */
+.chip { transition: transform .25s var(--spring, cubic-bezier(.34,1.4,.64,1)), background-color .2s, border-color .2s, box-shadow .2s; }
+.chip[aria-pressed="true"], .chip.on { border-color: var(--chipc, var(--accent)); background: color-mix(in srgb, var(--chipc, var(--accent)) 14%, var(--sheet)); box-shadow: 0 6px 16px -8px var(--chipc, var(--accent)); }
+.quick .chip[aria-pressed="true"] { background: color-mix(in srgb, var(--chipc, var(--accent)) 16%, var(--sheet)); }
+.chip:active { transform: scale(.94); }
+.chip .bico.sm { margin-left: -8px; }
+
+/* Магазини місяця */
+.shopstrip { display: flex; gap: 12px; overflow-x: auto; margin: 0 -16px; padding: 4px 16px 14px; scroll-snap-type: x proximity; scroll-padding: 0 16px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.shopstrip::-webkit-scrollbar { display: none; }
+.shopcard { --sc: var(--cn); flex: none; width: 138px; scroll-snap-align: start; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 14px; border-radius: 20px; text-align: left; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--sc) 17%, var(--sheet)), var(--sheet) 62%); box-shadow: var(--shadow, 0 6px 18px -10px rgba(0,0,0,.25)); border: 1px solid color-mix(in srgb, var(--sc) 22%, transparent);
+  transition: transform .3s var(--spring, cubic-bezier(.34,1.4,.64,1)), box-shadow .3s; }
+.shopcard .bico { margin-bottom: 8px; }
+.shopcard .sn { font-weight: 700; font-size: 15px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shopcard .sv { font-weight: 800; font-size: 19px; letter-spacing: -.02em; color: color-mix(in srgb, var(--sc) 62%, var(--ink)); }
+.shopcard .sm { font-size: 12px; color: var(--ink2); }
+.shopcard .sbar { display: block; width: 100%; height: 5px; border-radius: 3px; margin-top: 9px; background: color-mix(in srgb, var(--sc) 16%, transparent); overflow: hidden; }
+.shopcard .sbar i { display: block; height: 100%; border-radius: 3px; background: var(--sc); transform-origin: left; animation: sbarIn .8s var(--ease, cubic-bezier(.22,.8,.2,1)) both; }
+.shopcard:active { transform: scale(.95); }
+@media (hover: hover) { .shopcard:hover { transform: translateY(-3px); } }
+@keyframes sbarIn { from { transform: scaleX(0); } }
+
+/* Хвилька при дотику */
+.rip-host { position: relative; overflow: hidden; }
+.rip { position: absolute; border-radius: 50%; pointer-events: none; background: currentColor; opacity: .14; transform: scale(0); animation: rip .55s var(--ease, cubic-bezier(.22,.8,.2,1)) forwards; }
+@keyframes rip { to { transform: scale(1); opacity: 0; } }
+
+/* Бризки при виборі */
+.spark { position: fixed; z-index: 90; width: 7px; height: 7px; border-radius: 50%; pointer-events: none; }
+
+/* Кольорові штрихи на звичайних елементах */
+.txrow .amt { transition: color .2s; }
+.panel .txrow:active { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.sec-h h2 { position: relative; padding-left: 12px; }
+.sec-h h2::before { content: ''; position: absolute; left: 0; top: 18%; bottom: 18%; width: 4px; border-radius: 2px; background: linear-gradient(var(--gold, #B8935A), var(--accent)); }
+.btn-text { transition: transform .2s; } .btn-text:active { transform: scale(.94); }
+
+@media (prefers-reduced-motion: reduce) { .rip, .spark, .shopcard .sbar i { animation: none !important; } .bico, .chip, .shopcard { transition: none !important; } }
+.bwrap .bico b { transform: translate(-2px,-2px); }

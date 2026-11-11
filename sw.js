@@ -1,8 +1,8 @@
 /* Сервісний воркер: додаток відкривається без інтернету.
    Сторінка береться з мережі (щоб оновлення приходили), а коли мережі немає, з кешу.
    Запити до таблиці й до Gemini сюди не потрапляють: вони йдуть на інші адреси. */
-const VERSION = 'family-budget-v33';
-const SHELL = ['./', 'index.html', 'styles.css', 'fx.css', 'core.js', 'ui.js', 'fx.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
+const VERSION = 'family-budget-v34';
+const SHELL = ['./', 'index.html', 'styles.css', 'fx.css', 'brands.css', 'brands.js', 'pop.js', 'core.js', 'ui.js', 'fx.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2'];
 
 // Відповідь після перенаправлення не можна віддавати як сторінку, тому перед збереженням робимо чисту копію

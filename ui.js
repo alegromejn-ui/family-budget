@@ -45,6 +45,14 @@
     var inner = k ? '<svg class="ic"><use href="#ci-' + k + '"/></svg>' : '<b>' + esc(String(c.name || '?').trim().charAt(0).toUpperCase() || '?') + '</b>';
     return '<i class="cico' + dotCls(c) + '" aria-hidden="true">' + inner + '</i>';
   }
+  // Значок магазину: з відомого бренду в нотатці або з налаштованого списку магазинів
+  var BR = window.FBBrand || { badge: function () { return ''; }, find: function () { return null; }, color: function () { return null; } };
+  function txLead(t, c) {
+    var shop = c.kind === 'expense' ? F.tagOf(t, 'shops') : null; var nm = shop || (c.kind === 'expense' && BR.find(t.note) ? t.note : '');
+    var b = nm ? BR.badge(nm) : ''; if (!b) return catDot(c);
+    var k = c.colorIdx === -2 ? 'in' : c.colorIdx === -3 ? 'sav' : c.colorIdx === -4 ? 'cards' : CAT_ICONS[c.id] ? c.id : '';
+    return '<span class="bwrap">' + b + '<i class="cmini' + dotCls(c) + '" aria-hidden="true">' + (k ? '<svg class="ic"><use href="#ci-' + k + '"/></svg>' : '') + '</i></span>';
+  }
   function whole(n) { return money(Math.floor(n + 1e-9)); }
   function wholeUp(n) { return money(Math.ceil(n - 1e-9)); }
   function monthGen(m) { return new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'long' }).format(F.dateFromStr(m + '-01')).replace(/^\d+\s*/, '') + ' ' + m.slice(0, 4); }
@@ -124,7 +132,7 @@
     var sub = esc((t.note ? cname + ', ' : '') + (t.member || '')); var pi = c.kind === 'expense' ? F.payInfo(F.payOf(t)) : null;
     if (pi) sub += (sub ? ' · ' : '') + '<i class="paytag ' + pi.id + '">' + esc(pi.short + (F.cardOf(t) && F.cardById(F.cardOf(t)) ? ': ' + F.cardById(F.cardOf(t)).name : '')) + '</i>';
     var amt = c.kind === 'income' ? signedMoney(t.amount) : c.kind === 'saving' ? (t.amount < 0 ? 'зняття ' + money(-t.amount) : signedMoney(t.amount)) : c.kind === 'card' ? (t.amount < 0 ? 'погасили ' + money(-t.amount) : 'взяли ' + money(t.amount)) : money(t.amount);
-    return '<button class="txrow" data-act="edit" data-id="' + esc(t.id) + '">' + catDot(c) + '<span class="main"><b>' + esc(title) + '</b><span>' + sub + '</span></span><span class="amt num">' + esc(amt) + '</span></button>';
+    return '<button class="txrow" data-act="edit" data-id="' + esc(t.id) + '">' + txLead(t, c) + '<span class="main"><b>' + esc(title) + '</b><span>' + sub + '</span></span><span class="amt num">' + esc(amt) + '</span></button>';
   }
 
   // ---------- Нові блоки головного екрана ----------
@@ -262,6 +270,16 @@
     openSheet(html, { focus: '#cd-val' });
   }
 
+  // Магазини місяця: горизонтальна стрічка з фірмовими значками, дотик відкриває витрати цього магазину
+  function shopsStrip() {
+    var sh = F.byTag(curYm, 'shops'); if (!sh.items.length) return '';
+    var total = sh.items.reduce(function (a, x) { return a + x.total; }, sh.other.total || 0) || 1; var top = sh.items.slice(0, 8);
+    return '<section class="sec"><div class="sec-h"><h2>Магазини місяця</h2><button class="btn-text" data-act="tab" data-tab="reports">Усі</button></div><div class="shopstrip" role="list">' + top.map(function (x) {
+      var pct = Math.round(x.total / total * 100); var c = BR.color(x.name) || '#8A9993';
+      return '<button class="shopcard" role="listitem" data-act="shop-find" data-k="shops" data-s="' + esc(x.name) + '" style="--sc:' + c + '">' + BR.badge(x.name, 'lg') +
+        '<b class="sn">' + esc(x.name) + '</b><span class="sv num">' + money(x.total) + '</span><span class="sm">' + x.count + ' ' + plural(x.count, 'покупка', 'покупки', 'покупок') + ' · ' + pct + '%</span><span class="sbar"><i style="width:' + Math.max(pct, 4) + '%"></i></span></button>';
+    }).join('') + '</div></section>';
+  }
   function viewHome() {
     var today = F.todayStr(); var o = F.overview(today);
     var upcoming = F.upcomingRecurring(today).slice(0, 3);
@@ -272,7 +290,7 @@
     var h = top(cap(monthName(curYm))) + '<div class="hero-card' + (bad ? ' bad' : '') + '"><section class="hero" aria-live="polite">' + hero(o) + '</section>' + meter + stripHtml() + '</div>';
     h += flowSection();
     h += '<section class="sec"><div class="sec-h"><h2>Категорії</h2><button class="btn-text" data-act="budget">Бюджет</button></div><div class="panel">' + budgetRows(o) + '</div></section>';
-    h += limitsSection() + cardsSection();
+    h += shopsStrip() + limitsSection() + cardsSection();
     if (upcoming.length) {
       h += '<section class="sec"><div class="sec-h"><h2>Найближчі платежі</h2><button class="btn-text" data-act="recurring">Керувати</button></div><div class="panel"><ul class="ledger">' + upcoming.map(function (u) {
         return '<li><div class="lrow"><span class="name">' + catDot(F.catById(u.rec.category)) + '<b>' + esc(u.rec.name) + '</b></span><span class="lead"></span><span class="val num">' + money(u.rec.amount) + '</span></div><p class="status">' + esc(dayMonthShort(u.date)) + '</p></li>';
@@ -300,7 +318,7 @@
     var pi = F.payInfo(F.payOf(first));
     var sub = g.txs.length + ' ' + plural(g.txs.length, 'категорія', 'категорії', 'категорій') + (first.member ? ' · ' + esc(first.member) : '');
     if (pi) sub += ' · <i class="paytag ' + pi.id + '">' + esc(pi.short + (F.cardOf(first) && F.cardById(F.cardOf(first)) ? ': ' + F.cardById(F.cardOf(first)).name : '')) + '</i>';
-    return '<div class="visit-wrap"><button class="txrow visit" data-act="visit" data-id="' + esc(id) + '" aria-expanded="' + open + '"><i class="cico" aria-hidden="true"><svg class="ic"><use href="#i-cart"/></svg></i><span class="main"><b>' + esc(g.note) + '</b><span>' + sub + '</span></span><span class="amt num">' + money(g.total) + '</span>' + ic('right', 'sm chev') + '</button>' +
+    return '<div class="visit-wrap"><button class="txrow visit" data-act="visit" data-id="' + esc(id) + '" aria-expanded="' + open + '">' + (BR.badge(g.note) || '<i class="cico" aria-hidden="true"><svg class="ic"><use href="#i-cart"/></svg></i>') + '<span class="main"><b>' + esc(g.note) + '</b><span>' + sub + '</span></span><span class="amt num">' + money(g.total) + '</span>' + ic('right', 'sm chev') + '</button>' +
       (open ? '<div class="visit-body">' + g.txs.map(txRowHtml).join('') + '</div>' : '') + '</div>';
   }
   function listModeSeg() {
@@ -327,7 +345,7 @@
     var list = kind === 'expense' ? F.monthTxs(ym) : F.monthKind(ym, kind);
     if (shopSel && kind === 'expense') list = list.filter(function (t) { return F.tagOf(t, shopKind) === shopSel; });
     var h = monthNav(F.sum(list));
-    if (shopSel && kind === 'expense') h += '<div class="found"><span>' + (shopKind === 'clubs' ? 'Гурток' : shopKind === 'places' ? 'Адреса' : 'Магазин') + ': <b>' + esc(shopSel) + '</b></span><button class="btn-text" data-act="shop-clear">Показати всі</button></div>';
+    if (shopSel && kind === 'expense') h += '<div class="found"><span>' + (shopKind === 'shops' ? BR.badge(shopSel, 'sm') : '') + (shopKind === 'clubs' ? 'Гурток' : shopKind === 'places' ? 'Адреса' : 'Магазин') + ': <b>' + esc(shopSel) + '</b></span><button class="btn-text" data-act="shop-clear">Показати всі</button></div>';
     var asVisits = kind === 'expense' && listMode === 'visits';
     if (kind === 'expense') h += listModeSeg();
     if (kind === 'expense' && !shopSel) {
@@ -367,7 +385,7 @@
       var pct = total > 0 ? it.value / total * 100 : 0;
       var link = !!(it.id || it.shop);
       var open = it.id ? '<button class="hbar catlink" data-act="open-cat" data-c="' + esc(it.id) + '">' : it.shop ? '<button class="hbar catlink" data-act="shop-find" data-k="' + esc(it.tk || 'shops') + '" data-s="' + esc(it.shop) + '">' : '<div class="hbar">';
-      return open + '<span class="lrow"><span class="name">' + it.dot + '<b>' + esc(it.name) + '</b></span><span class="lead"></span><span class="val num">' + money(it.value) + ' <small>' + Math.round(pct) + '%</small></span>' + (link ? ic('right', 'sm chev') : '') + '</span><span class="track"><i class="' + it.cls + '" style="width:' + Math.max(pct, 0.5).toFixed(1) + '%"></i></span>' + (link ? '</button>' : '</div>');
+      return open + '<span class="lrow"><span class="name">' + it.dot + '<b>' + esc(it.name) + '</b></span><span class="lead"></span><span class="val num">' + money(it.value) + ' <small>' + Math.round(pct) + '%</small></span>' + (link ? ic('right', 'sm chev') : '') + '</span><span class="track"><i class="' + it.cls + '" style="width:' + Math.max(pct, 0.5).toFixed(1) + '%' + (it.brand ? ';background:' + it.brand : '') + '"></i></span>' + (link ? '</button>' : '</div>');
     }).join('');
   }
   function colsSvg(series, budget, label) {
@@ -406,7 +424,7 @@
     if (repMode === 'table') {
       h += '<table class="t"><thead><tr><th>' + (kind === 'clubs' ? 'Гурток' : kind === 'places' ? 'Адреса' : 'Магазин') + '</th><th>Сума</th><th>Платежів</th></tr></thead><tbody>' + sh.items.map(function (x) { return '<tr><td>' + esc(x.name) + '</td><td class="num">' + money(x.total) + '</td><td class="num">' + x.count + '</td></tr>'; }).join('') + (sh.other.count ? '<tr><td>' + otherLabel + '</td><td class="num">' + money(sh.other.total) + '</td><td class="num">' + sh.other.count + '</td></tr>' : '') + '</tbody></table>';
     } else {
-      var rows = sh.items.map(function (x, i) { var k = i % F.MAX_COLORED; return { shop: x.name, tk: kind, name: x.name, value: x.total, cls: 'c' + k, dot: '<i class="dot c' + k + '" aria-hidden="true"></i>' }; });
+      var rows = sh.items.map(function (x, i) { var k = i % F.MAX_COLORED; return { shop: x.name, tk: kind, name: x.name, value: x.total, cls: 'c' + k, dot: kind === 'shops' ? BR.badge(x.name, 'sm') : '<i class="dot c' + k + '" aria-hidden="true"></i>', brand: kind === 'shops' ? BR.color(x.name) : null }; });
       if (sh.other.count) rows.push({ name: otherLabel, value: sh.other.total, cls: '', dot: '<i class="dot" aria-hidden="true"></i>' });
       h += barRows(rows, total);
     }
@@ -651,7 +669,7 @@
   }
   function tagChipsHtml(k, t) {
     return (F.state.cfg[k] || []).map(function (n) {
-      return '<button type="button" class="chip" data-act="shop" data-k="' + k + '" data-s="' + esc(n) + '" aria-pressed="' + (!!t && F.tagOf(t, k) === n) + '">' + esc(n) + '</button>';
+      return '<button type="button" class="chip" data-act="shop" data-k="' + k + '" data-s="' + esc(n) + '" aria-pressed="' + (!!t && F.tagOf(t, k) === n) + '"' + (k === 'shops' && BR.color(n) ? ' style="--chipc:' + BR.color(n) + '"' : '') + '>' + (k === 'shops' ? BR.badge(n, 'sm') : '') + esc(n) + '</button>';
     }).join('');
   }
   function syncShops() {
@@ -985,7 +1003,7 @@
     var names = F.state.cfg[kind]; var T = TAG_TEXT[kind];
     var html = sheetTop(T.title, T.sub) +
       (names.length ? '<ul class="ledger">' + names.map(function (n) {
-        return '<li class="shop-row"><span class="lrow"><span class="name"><b>' + esc(n) + '</b></span></span><button class="ibtn" data-act="shop-del" data-k="' + kind + '" data-s="' + esc(n) + '" aria-label="' + T.del + esc(n) + '">' + ic('trash') + '</button></li>';
+        return '<li class="shop-row"><span class="lrow"><span class="name">' + (kind === 'shops' ? BR.badge(n) : '') + '<b>' + esc(n) + '</b></span></span><button class="ibtn" data-act="shop-del" data-k="' + kind + '" data-s="' + esc(n) + '" aria-label="' + T.del + esc(n) + '">' + ic('trash') + '</button></li>';
       }).join('') + '</ul>' : '<p class="hint">' + T.empty + '</p>') +
       '<form data-form="shop-add" data-k="' + kind + '" class="edit-row" style="grid-template-columns:1fr auto;margin-top:12px"><label class="sr" for="shop-new">' + esc(T.ph) + '</label><input class="in" id="shop-new" maxlength="30" autocomplete="off" placeholder="' + esc(T.ph) + '"><button class="btn sm" type="submit">Додати</button></form>' +
       '<p class="note bad" id="shop-err" role="alert" hidden></p>';

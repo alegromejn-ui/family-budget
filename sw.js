@@ -1,11 +1,11 @@
 /* Сервісний воркер: додаток відкривається без інтернету.
    Сторінка береться з мережі (щоб оновлення приходили), а коли мережі немає, з кешу.
    Запити до таблиці й до Gemini сюди не потрапляють: вони йдуть на інші адреси. */
-const VERSION = 'family-budget-v42';
+const VERSION = 'family-budget-v43';
 // Номер у адресах файлів: після оновлення телефон не може підставити старий файл із кешу замість нового
-const V = '?v=42';
+const V = '?v=43';
 const ICONS = 'family-budget-icons-1';
-const SHELL = ['./', 'index.html', 'styles.css' + V, 'fx.css' + V, 'brands.css' + V, 'neo.css' + V, 'brands.js' + V, 'pop.js' + V, 'core.js' + V, 'ui.js' + V, 'fx.js' + V, 'manifest.json', 'icon-192.png', 'icons/avrora.png?v=42', 'icon-512.png', 'apple-touch-icon.png',
+const SHELL = ['./', 'index.html', 'styles.css' + V, 'fx.css' + V, 'brands.css' + V, 'neo.css' + V, 'brands.js' + V, 'pop.js' + V, 'core.js' + V, 'ui.js' + V, 'fx.js' + V, 'manifest.json', 'icon-192.png', 'icons/avrora.png?v=43', 'icon-512.png', 'apple-touch-icon.png',
   'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2',
   'fonts/unbounded-cyrillic-wght-normal.woff2', 'fonts/unbounded-cyrillic-ext-wght-normal.woff2', 'fonts/unbounded-latin-wght-normal.woff2'];
 

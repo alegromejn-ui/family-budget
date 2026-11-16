@@ -1243,10 +1243,6 @@
     var k = (S.me.geminiKey || '').trim(); if (k) return k;
     try { return (localStorage.getItem(NUTRIPLAN_KEY) || '').trim(); } catch (e) { return ''; }
   }
-  // Ключ Anthropic починається з «sk-ant-»: тоді розпізнавання йде через Claude, інакше через Gemini.
-  var CLAUDE_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5'];
-  function provider() { var k = geminiKey(); if (!k) return 'none'; return /^sk-ant-/i.test(k) ? 'claude' : 'gemini'; }
-  function aiName() { return provider() === 'claude' ? 'Claude' : 'Gemini'; }
   function keySource() { if ((S.me.geminiKey || '').trim()) return 'own'; return geminiKey() ? 'nutriplan' : 'none'; }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   // Пояснення від Google з відповіді на помилку: JSON-повідомлення, а якщо відповідь не JSON — початок тексту без тегів.
@@ -1268,64 +1264,10 @@
     var pref = ''; try { pref = localStorage.getItem(MODEL_PREF_KEY) || ''; } catch (e) { /* ignore */ }
     return pref && GEMINI_MODELS.indexOf(pref) >= 0 ? [pref].concat(GEMINI_MODELS.filter(function (m) { return m !== pref; })) : GEMINI_MODELS.slice();
   }
-  // Перетворюємо запит у форматі Gemini на запит Claude, а відповідь Claude назад у форму Gemini,
-  // щоб решта коду (чеки, ШІ-аналіз) працювала без змін.
-  function lowerTypes(o) {
-    if (Array.isArray(o)) return o.map(lowerTypes);
-    if (o && typeof o === 'object') { var r = {}; Object.keys(o).forEach(function (k) { r[k] = (k === 'type' && typeof o[k] === 'string') ? o[k].toLowerCase() : lowerTypes(o[k]); }); return r; }
-    return o;
-  }
-  function claudeBody(payload, model) {
-    var gc = payload.generationConfig || {}; var content = [];
-    (payload.contents || []).forEach(function (c) {
-      var imgs = [], txt = [];
-      (c.parts || []).forEach(function (p) {
-        if (p.inlineData) imgs.push({ type: 'image', source: { type: 'base64', media_type: p.inlineData.mimeType || 'image/jpeg', data: p.inlineData.data } });
-        else if (p.text) txt.push({ type: 'text', text: p.text });
-      });
-      content = content.concat(imgs, txt);
-    });
-    var b = { model: model, max_tokens: gc.responseSchema ? 4096 : Math.max(1024, gc.maxOutputTokens || 2048), messages: [{ role: 'user', content: content }] };
-    var sys = payload.systemInstruction && payload.systemInstruction.parts && payload.systemInstruction.parts.map(function (p) { return p.text || ''; }).join('\n');
-    if (sys) b.system = sys;
-    if (gc.responseSchema) {
-      b.tools = [{ name: 'save_receipt', description: 'Зберегти розпізнаний чек', input_schema: lowerTypes(gc.responseSchema) }];
-      b.tool_choice = { type: 'tool', name: 'save_receipt' };
-    }
-    return b;
-  }
-  function claudeToGemini(data) {
-    var blocks = (data && data.content) || []; var text = '';
-    blocks.forEach(function (b) { if (b.type === 'tool_use') text = JSON.stringify(b.input || {}); else if (b.type === 'text' && !text) text = b.text || ''; });
-    var all = blocks.filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
-    if (!blocks.some(function (b) { return b.type === 'tool_use'; })) text = all;
-    return { candidates: [{ content: { parts: [{ text: text }] } }] };
-  }
-  async function claudeRequest(payload, opts) {
-    opts = opts || {}; var apiKey = geminiKey(); var delays = FB.geminiDelays; var used = 0; var lastErr = null; var softErr = null;
-    for (var mi = 0; mi < CLAUDE_MODELS.length; mi++) {
-      var model = CLAUDE_MODELS[mi]; var body = JSON.stringify(claudeBody(payload, model));
-      for (;;) {
-        var res; var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-        var timer = ctl ? setTimeout(function () { ctl.abort(); }, opts.timeoutMs || 45000) : null;
-        try { res = await FB.fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: body, signal: ctl ? ctl.signal : undefined }); }
-        catch (ne) { if (timer) clearTimeout(timer); lastErr = softErr = new Error('NETWORK'); lastErr.code = 'NETWORK'; if (used >= delays.length) break; await sleep(delays[used++]); continue; }
-        if (timer) clearTimeout(timer);
-        if (res.ok) return claudeToGemini(await res.json());
-        lastErr = new Error('HTTP ' + res.status); lastErr.code = 'HTTP_' + res.status; lastErr.status = res.status; lastErr.model = model; lastErr.detail = await errorDetail(res);
-        if (res.status === 404) break;
-        if (res.status === 429 || res.status === 529 || res.status >= 500) { softErr = lastErr; if (used >= delays.length) break; await sleep(delays[used++]); continue; }
-        throw lastErr;
-      }
-    }
-    if (lastErr && lastErr.status === 404 && softErr) throw softErr;
-    throw lastErr || new Error('UNKNOWN');
-  }
   async function geminiRequest(payload, opts) {
     opts = opts || {};
     var apiKey = geminiKey();
     if (!apiKey) { var e0 = new Error('NO_KEY'); e0.code = 'NO_KEY'; throw e0; }
-    if (provider() === 'claude') return claudeRequest(payload, opts);
     var delays = FB.geminiDelays; var used = 0; var lastErr = null; var softErr = null;
     var models = modelOrder();
     // Повтори (пауза між ними) спільні для всіх моделей: перевантажена модель не змушує чекати кілька разів поспіль.
@@ -1357,16 +1299,6 @@
   async function testKey() {
     var apiKey = geminiKey(); var out = [];
     if (!apiKey) return [{ ok: false, step: 'Ключ', text: 'ключ не додано' }];
-    if (provider() === 'claude') {
-      for (var ci = 0; ci < CLAUDE_MODELS.length; ci++) {
-        try {
-          var cr = await FB.fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({ model: CLAUDE_MODELS[ci], max_tokens: 16, messages: [{ role: 'user', content: 'Відповідай одним словом: ок' }] }) });
-          if (cr.ok) out.push({ ok: true, step: CLAUDE_MODELS[ci], text: 'ОК (' + cr.status + ')' });
-          else { var cd = await errorDetail(cr); out.push({ ok: false, step: CLAUDE_MODELS[ci], text: 'код ' + cr.status + (cd ? ': ' + cd.slice(0, 160) : ', без пояснення') }); }
-        } catch (ce) { out.push({ ok: false, step: CLAUDE_MODELS[ci], text: 'немає зв’язку з Anthropic (мережа, VPN або блокувальник)' }); }
-      }
-      return out;
-    }
     async function run(step, url, opts) {
       var r;
       try { r = await FB.fetch(url, opts); } catch (e) { out.push({ ok: false, step: step, text: 'немає зв’язку з Google (мережа, VPN або блокувальник)' }); return; }
@@ -1381,24 +1313,12 @@
     }
     return out;
   }
-  function describeClaudeError(err) {
-    var st = err && err.status; var d = String((err && err.detail) || ''); var low = d.toLowerCase();
-    if (st === 401) return 'Anthropic не прийняв ключ (код 401). Скопіюйте його ще раз повністю або створіть новий на console.anthropic.com.';
-    if (st === 403) return 'Ключу Claude заборонено цей запит (код 403). Перевірте права ключа в console.anthropic.com.';
-    if (st === 400 && /credit|balance/.test(low)) return 'На рахунку Anthropic закінчилися кошти. Поповніть баланс у console.anthropic.com.';
-    if (st === 400) return 'Claude відхилив запит (код 400). ' + (d ? 'Відповідь: «' + d.slice(0, 160) + '».' : '') + ' Натисніть «Перевірити ключ» у налаштуваннях.';
-    if (st === 404) return 'Жодна з моделей Claude недоступна для вашого ключа.';
-    if (st === 429) return 'Перевищено ліміт запитів Claude. Зачекайте хвилину.';
-    if (st === 529 || st >= 500) return 'Claude зараз перевантажений (код ' + st + '). Спробуйте ще раз за кілька хвилин.';
-    return null;
-  }
   function describeGeminiError(err) {
     var st = err && err.status;
-    if (provider() === 'claude' && st) { var cm = describeClaudeError(err); if (cm) return cm; }
-    if (err && err.code === 'NO_KEY') return 'Для розпізнавання чеків потрібен ключ Claude або Gemini. Додайте його в «Ще».';
+    if (err && err.code === 'NO_KEY') return 'Для розпізнавання чеків потрібен ключ Gemini. Додайте його в «Ще».';
     if (err && err.code === 'NETWORK') return 'Немає інтернету. Спробуйте ще раз або введіть суму вручну.';
     if (err && err.code === 'AI_NO_DATA') return 'Поки що немає записів для аналізу. Додайте кілька витрат.';
-    if (err && err.code === 'AI_EMPTY') return aiName() + ' не дав відповіді. Спробуйте поставити питання інакше.';
+    if (err && err.code === 'AI_EMPTY') return 'Gemini не дав відповіді. Спробуйте поставити питання інакше.';
     if (err && err.code === 'BAD_JSON') return 'Не вдалося прочитати чек. Спробуйте зробити фото рівніше й ближче.';
     if (st === 400 || st === 401 || st === 403) {
       var d = String((err && err.detail) || ''); var low = d.toLowerCase();
@@ -1603,7 +1523,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, provider: provider, aiName: aiName, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v36', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v36', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

@@ -89,7 +89,8 @@
   var REAL_KEY = 'fb_real_icons'; var okSet = {}, badSet = {};
   function realOn() { try { return localStorage.getItem(REAL_KEY) !== '0'; } catch (e) { return true; } }
   function setReal(on) { try { localStorage.setItem(REAL_KEY, on ? '1' : '0'); } catch (e) { /* пам’ять недоступна */ } }
-  function srcFor(key, n) { var d = DOM[key]; return n === 2 ? 'https://icons.duckduckgo.com/ip3/' + d + '.ico' : 'https://www.google.com/s2/favicons?domain=' + d + '&sz=128'; }
+  var LOCAL = { avrora: 'icons/avrora.png?v=39' };
+  function srcFor(key, n) { if (LOCAL[key]) return LOCAL[key]; var d = DOM[key]; return n === 2 ? 'https://icons.duckduckgo.com/ip3/' + d + '.ico' : 'https://www.google.com/s2/favicons?domain=' + d + '&sz=128'; }
   function markAll(key) { var list = document.querySelectorAll('.bico[data-brand="' + key + '"]'); for (var i = 0; i < list.length; i++) list[i].classList.add('real'); }
   // Сервіс замість відсутнього значка віддає крихітний глобус 16×16: такий не показуємо
   function imgOk(img) { var key = img.getAttribute('data-k'); if (img.naturalWidth < 32) return imgFail(img); okSet[key] = img.getAttribute('data-n') || '1'; markAll(key); }

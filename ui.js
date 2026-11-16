@@ -661,7 +661,7 @@
       '</ul></div></section>';
     h += '<section class="sec"><div class="sec-h"><h2>Помічники</h2></div><div class="panel"><ul class="menu">' +
       mrow('ai', 'sparkle', 'ШІ-аналіз', 'Питання про ваші витрати') +
-      mrow('key', 'camera', 'Розпізнавання чеків', { own: 'Ключ Gemini додано', nutriplan: 'Використовується ключ з NutriPlan', none: 'Потрібен ключ Gemini' }[F.keySource()]) +
+      mrow('key', 'camera', 'Розпізнавання чеків', { own: 'Ключ ' + F.aiName() + ' додано', nutriplan: 'Використовується ключ з NutriPlan', none: 'Потрібен ключ Claude або Gemini' }[F.keySource()]) +
       '<li><button data-act="real-icons" role="switch" aria-checked="' + BR.realOn() + '"><span class="ico">' + ic('cart') + '</span><span class="grow"><span class="t1">Справжні значки магазинів</span><span class="t2">' + (BR.realOn() ? 'Завантажуються із сайтів магазинів, потрібен інтернет' : 'Вимкнено: кольорові плашки з літерою') + '</span></span><i class="switch" aria-hidden="true"></i></button></li>' +
       '</ul></div></section>';
     h += '<section class="sec"><div class="sec-h"><h2>Безпека й дані</h2></div><div class="panel"><ul class="menu">' +
@@ -840,7 +840,7 @@
       '<label class="field"><span>Нотатка</span><input class="in" id="tx-note" maxlength="200" list="note-list" autocomplete="off" placeholder="За бажанням" value="' + esc(t ? t.note : '') + '"></label></div>' +
       '<datalist id="note-list">' + F.noteSuggestions().map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
       '<div id="tx-scan-wrap"' + (kind === 'expense' ? '' : ' hidden') + '><button type="button" class="scan" id="tx-scan" data-act="scan">' + ic('camera') + 'Сфотографувати чек</button><input type="file" id="tx-file" accept="image/*" hidden>' +
-      '<p class="note" id="tx-scan-note">Фото чека або скриншот замовлення з інтернет-магазину надсилається в Google Gemini для розпізнавання, на сервері родини воно не зберігається.</p></div>' +
+      '<p class="note" id="tx-scan-note">Фото чека або скриншот замовлення з інтернет-магазину надсилається в ' + (F.provider() === 'claude' ? 'Claude (Anthropic)' : 'Google Gemini') + ' для розпізнавання, на сервері родини воно не зберігається.</p></div>' +
       '<button class="btn" type="submit">Зберегти</button>' + (t ? '<button type="button" class="btn alt" data-act="repeat-tx" data-id="' + esc(id) + '">' + ic('repeat', 'sm') + 'Повторити сьогодні</button><button type="button" class="btn danger" data-act="del-tx" data-id="' + esc(id) + '">' + ic('trash', 'sm') + 'Видалити</button>' : '') + '</form>';
     openSheet(html, { focus: t ? null : '#tx-amount' });
   }
@@ -1191,10 +1191,10 @@
   }
   function openKey() {
     var src = F.keySource();
-    var html = '<form data-form="key" novalidate>' + sheetTop('Ключ Gemini', 'Потрібен лише для розпізнавання чеків по фото. Без нього все інше працює.') +
+    var html = '<form data-form="key" novalidate>' + sheetTop('Ключ Claude або Gemini', 'Потрібен лише для розпізнавання чеків і ШІ-аналізу. Без нього все інше працює. Ключ Claude починається з sk-ant-, інакше застосунок вважає його ключем Gemini.') +
       (src === 'nutriplan' ? '<p class="note">Зараз використовується ключ, який ви додали в NutriPlan. Можна лишити так.</p>' : '') +
       '<label class="field"><span>Ключ API</span><input class="in" id="k-val" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Вставте ключ" value="' + esc(F.state.me.geminiKey) + '"></label>' +
-      '<p class="note">Ключ зберігається лише на цьому телефоні. Безкоштовний ліміт Google дозволяє їм використовувати надіслані фото для покращення продуктів, тому не знімайте чеки з особистими даними.</p>' +
+      '<p class="note">Ключ зберігається лише на цьому телефоні. Для Gemini безкоштовний ліміт Google дозволяє використовувати надіслані фото для покращення продуктів, тому не знімайте чеки з особистими даними. Ключ Claude краще обмежити лімітом витрат у console.anthropic.com.</p>' +
       '<button class="btn" type="submit">Зберегти</button>' + (F.keySource() !== 'none' ? '<button type="button" class="btn alt" data-act="key-test">Перевірити ключ</button><div class="note" id="k-test" role="status" aria-live="polite" hidden></div>' : '') + (F.state.me.geminiKey ? '<button type="button" class="btn danger" data-act="key-del">Видалити ключ</button>' : '') + '</form>';
     openSheet(html, { focus: '#k-val' });
   }
@@ -1236,7 +1236,7 @@
     aiBusy = false;
     var html = '<form data-form="ai" novalidate>' + sheetTop('ШІ-аналіз', cap(monthName(ym)) + ' ' + ym.slice(0, 4) + ' і попередні місяці для порівняння.');
     if (F.keySource() === 'none') {
-      html += '<p class="note">Для аналізу потрібен ключ Gemini, такий самий, як для розпізнавання чеків.</p><button type="button" class="btn" data-act="key">Додати ключ</button></form>';
+      html += '<p class="note">Для аналізу потрібен ключ Claude або Gemini, такий самий, як для розпізнавання чеків.</p><button type="button" class="btn" data-act="key">Додати ключ</button></form>';
     } else {
       html += '<button type="button" class="btn" data-act="ai-ask" data-q="">' + ic('sparkle') + ' Зробити аналіз</button>' +
         '<div class="chips ai-chips" role="group" aria-label="Готові питання">' + AI_CHIPS.map(function (c) { return '<button type="button" class="chip" data-act="ai-ask" data-q="' + esc(c[1]) + '">' + esc(c[0]) + '</button>'; }).join('') + '</div>' +

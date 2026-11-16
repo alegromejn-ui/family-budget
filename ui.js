@@ -46,7 +46,7 @@
     return '<i class="cico' + dotCls(c) + '" aria-hidden="true">' + inner + '</i>';
   }
   // Значок магазину: з відомого бренду в нотатці або з налаштованого списку магазинів
-  var BR = window.FBBrand || { badge: function () { return ''; }, find: function () { return null; }, color: function () { return null; } };
+  var BR = window.FBBrand || { badge: function () { return ''; }, find: function () { return null; }, color: function () { return null; }, realOn: function () { return false; }, setReal: function () {} };
   function txLead(t, c) {
     var shop = c.kind === 'expense' ? F.tagOf(t, 'shops') : null; var nm = shop || (c.kind === 'expense' && BR.find(t.note) ? t.note : '');
     var b = nm ? BR.badge(nm) : ''; if (!b) return catDot(c);
@@ -69,16 +69,25 @@
   var repMode = 'chart';
 
   // ---------- Верх сторінки та статус синхронізації ----------
+  var backTo = 'home';
+  var MAIN = { home: 1, list: 1, wallet: 1, reports: 1 };
   function pill() {
     var st = F.sync; var dirty = F.dirtyCount();
-    if (!F.isConnected()) return '<button class="pill" data-act="open-connect">' + ic('users', 'sm') + '<span>Тільки на цьому телефоні</span></button>';
-    if (st.status === 'syncing') return '<span class="pill">' + ic('sync', 'sm') + '<span>Синхронізація…</span></span>';
-    if (st.status === 'error') return '<button class="pill bad" data-act="tab" data-tab="more">' + ic('alert', 'sm') + '<span>Помилка синхронізації</span></button>';
+    if (!F.isConnected()) return '<button class="pill ico" data-act="open-connect" aria-label="Тільки на цьому телефоні. Підключити сім’ю" title="Тільки на цьому телефоні">' + ic('users', 'sm') + '</button>';
+    if (st.status === 'syncing') return '<span class="pill ico spin" role="img" aria-label="Синхронізація" title="Синхронізація">' + ic('sync', 'sm') + '</span>';
+    if (st.status === 'error') return '<button class="pill bad" data-act="go" data-v="more">' + ic('alert', 'sm') + '<span>Помилка синхронізації</span></button>';
     if (st.status === 'offline') return '<button class="pill bad" data-act="sync">' + ic('cloud-off', 'sm') + '<span>Не надіслано: ' + dirty + '</span></button>';
     if (dirty > 0) return '<span class="pill">' + ic('sync', 'sm') + '<span>Надсилання: ' + dirty + '</span></span>';
-    return '<span class="pill">' + ic('check', 'sm') + '<span>Синхронізовано</span></span>';
+    return '<span class="pill ico ok" role="img" aria-label="Синхронізовано" title="Синхронізовано">' + ic('check', 'sm') + '</span>';
   }
-  function top(title) { return '<header class="top"><h1>' + esc(title) + '</h1>' + pill() + '</header>'; }
+  // Головні розділи мають у шапці закупки й налаштування, вкладені екрани — кнопку «Назад»
+  function top(title, back, sub) {
+    var n = (F.state.cfg.shopping || []).length; var me = (F.state.me.name || '').trim();
+    return '<header class="top' + (back ? ' inner' : '') + '">' + (back ? '<button class="backbtn" data-act="go-back" aria-label="Назад">' + ic('left') + '</button>' : '') +
+      '<div class="top-t"><h1>' + esc(title) + '</h1>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div><div class="top-r">' + pill() +
+      (back ? '' : '<button class="hbtn" data-act="go" data-v="shopping" aria-label="Закупки' + (n ? ', у списку ' + n : '') + '">' + ic('cart') + (n ? '<i class="hbadge num">' + n + '</i>' : '') + '</button>' +
+        '<button class="avatar" data-act="go" data-v="more" aria-label="Налаштування">' + esc((me.charAt(0) || 'Я').toUpperCase()) + '</button>') + '</div></header>';
+  }
 
   // ---------- Огляд ----------
   function liveCount() { return Object.keys(F.state.txs).filter(function (k) { return !F.state.txs[k].deleted; }).length; }
@@ -110,9 +119,11 @@
     return '<div class="strip"><svg viewBox="0 0 ' + (n * 10) + ' 56" preserveAspectRatio="none" role="img" aria-label="Витрати за днями поточного місяця">' + out + '</svg><p class="read" id="strip-read" aria-live="polite">Витрати за днями. Торкніться стовпчика.</p></div>';
   }
 
-  function budgetRows(o) {
+  var homeCatCount = 0;
+  function budgetRows(o, max) {
     var spent = F.spentByCategory(curYm);
     var rows = F.categories().filter(function (c) { return spent[c.id] > 0 || c.limit; }).sort(function (a, b) { return (spent[b.id] || 0) - (spent[a.id] || 0); });
+    homeCatCount = rows.length; if (max) rows = rows.slice(0, max);
     if (!rows.length) return '<p class="hint">Тут з’являться категорії, щойно буде перша витрата.</p>';
     return '<ul class="ledger">' + rows.map(function (c) {
       var s = spent[c.id] || 0; var lim = c.limit;
@@ -280,26 +291,96 @@
         '<b class="sn">' + esc(x.name) + '</b><span class="sv num">' + money(x.total) + '</span><span class="sm">' + x.count + ' ' + plural(x.count, 'покупка', 'покупки', 'покупок') + ' · ' + pct + '%</span><span class="sbar"><i style="width:' + Math.max(pct, 4) + '%"></i></span></button>';
     }).join('') + '</div></section>';
   }
+  // Кільце темпу: зовнішня дуга — скільки місяця минуло, внутрішня — скільки бюджету витрачено
+  function ring(spendPct, timePct, big, small, over, label) {
+    var arc = function (r, pct, cls) { var C = 2 * Math.PI * r; return '<circle class="' + cls + '" cx="60" cy="60" r="' + r + '" stroke-dasharray="' + (C * Math.min(100, Math.max(0, pct)) / 100).toFixed(1) + ' ' + C.toFixed(1) + '"/>'; };
+    return '<div class="ring' + (over ? ' over' : '') + '" role="img" aria-label="' + esc(label) + '"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="tr" cx="60" cy="60" r="53"/><circle class="tr2" cx="60" cy="60" r="40"/>' +
+      arc(53, timePct, 'time') + (spendPct == null ? '' : arc(40, spendPct, 'spend')) + '</svg><div class="ring-c"><b class="num">' + big + '</b><span>' + small + '</span></div></div>';
+  }
+  function statRow(label, val) { return '<li><span>' + label + '</span><b class="num">' + val + '</b></li>'; }
+  function heroCard(o) {
+    if (!liveCount()) return '<div class="hero-card empty-hero"><section class="hero" aria-live="polite">' + hero(o) + '</section></div>';
+    var day = Number(F.todayStr().slice(8, 10)); var days = day + o.daysLeft - 1; var timePct = Math.round(day / days * 100);
+    var head, rows, rg, extra, bad = false;
+    if (o.budget) {
+      bad = o.over || o.leftToday < 0;
+      head = o.over ? '<p class="hero-line bad">Бюджет місяця перевищено на <span class="amt">' + money(-o.remaining) + '</span></p>'
+        : o.leftToday < 0 ? '<p class="hero-line bad">Денну норму перевищено на <span class="amt">' + wholeUp(-o.leftToday) + '</span></p>'
+          : '<p class="hero-line">Сьогодні ще можна витратити <span class="amt">' + whole(o.leftToday) + '</span></p>';
+      var diff = o.usedPct - timePct;
+      extra = '<p class="ring-leg" aria-hidden="true"><span><i></i>бюджет</span><span><i class="t"></i>місяць</span></p><p class="pace' + (diff > 5 ? ' fast' : '') + '">' + (Math.abs(diff) <= 5 ? 'Темп рівний: витрати йдуть у ногу з місяцем' : diff > 0 ? 'Витрачаєте швидше, ніж минає місяць' : 'Витрачаєте повільніше, ніж минає місяць') + '</p>';
+      rows = statRow(o.over ? 'Витрачено' : 'Залишок', money(o.over ? o.spent : o.remaining)) + statRow('Денна норма', whole(o.allowToday)) + statRow('Сьогодні', money(o.spentToday));
+      rg = ring(o.usedPct, timePct, o.usedPct + '%', 'бюджету', o.over, 'Витрачено ' + o.usedPct + '% бюджету, минуло ' + timePct + '% місяця');
+    } else {
+      head = '<p class="hero-line">За ' + esc(monthName(o.ym)) + ' витрачено <span class="amt">' + money(o.spent) + '</span></p>';
+      rows = (o.prevSame > 0 ? statRow('Минулого місяця на цей день', money(o.prevSame)) : '') + statRow('У середньому за день', whole(o.spent / day)) + statRow('Сьогодні', money(o.spentToday));
+      extra = '<button class="btn-text" data-act="budget">' + ic('sliders', 'sm') + 'Задати бюджет</button>';
+      rg = ring(null, timePct, String(day), 'з ' + days + ' ' + plural(days, 'дня', 'днів', 'днів'), false, 'Минуло ' + timePct + '% місяця');
+    }
+    return '<div class="hero-card' + (bad ? ' bad' : '') + '"><section class="hero" aria-live="polite">' + head + '</section><div class="pace-row">' + rg + '<div class="pace-info"><ul class="stats">' + rows + '</ul>' + extra + '</div></div>' + stripHtml() + '</div>';
+  }
+  function tile(act, attrs, icon, label, val, sub, cls) {
+    return '<button class="tile' + (cls ? ' ' + cls : '') + '" data-act="' + act + '"' + (attrs || '') + '><span class="tl">' + ic(icon, 'sm') + label + '</span><b class="num">' + val + '</b>' + (sub ? '<span class="ts">' + sub + '</span>' : '') + '</button>';
+  }
+  function tilesSection() {
+    var today = F.todayStr(); var f = F.monthFlow(curYm); var out = [];
+    if (f.income > 0 || f.saved !== 0) {
+      out.push(tile('list-kind', ' data-k="income"', 'in', 'Доходи', signedMoney(f.income), f.saved !== 0 ? 'відкладено ' + money(f.saved) : 'за ' + esc(monthName(curYm)), 'inc'));
+      out.push(tile('tab', ' data-tab="reports"', 'chart', 'Залишок місяця', money(f.balance), f.balance < 0 ? 'витрати перевищили доходи' : 'доходи мінус витрати', f.balance < 0 ? 'neg' : ''));
+    } else if (liveCount()) out.push(tile('add-income', '', 'in', 'Доходи', 'Додати', 'щоб бачити залишок місяця', 'ghost'));
+    var cs = F.cardsSummary(); var ls = F.state.cfg.loans.length ? F.loansSummary(today).total : 0; var debt = Math.round((cs.total + ls) * 100) / 100;
+    if (debt > 0) out.push(tile('tab', ' data-tab="wallet"', 'card', 'Борги', money(debt), cs.total > 0 ? 'кредитки ' + money(cs.total) : 'кредити', 'debt'));
+    var up = F.upcomingRecurring(today)[0];
+    if (up) out.push(tile('tab', ' data-tab="wallet"', 'calendar', 'Найближчий платіж', money(up.rec.amount), esc(up.rec.name) + ', ' + esc(dayMonthShort(up.date))));
+    var goals = F.state.cfg.goals;
+    if (goals.length && out.length % 2) { var saved = goals.reduce(function (a, g) { return a + F.goalInfo(g, today).saved; }, 0); out.push(tile('tab', ' data-tab="wallet"', 'check', 'Накопичено', money(saved), goals.length + ' ' + plural(goals.length, 'ціль', 'цілі', 'цілей'))); }
+    return out.length ? '<div class="tiles' + (out.length % 2 ? ' odd' : '') + '">' + out.join('') + '</div>' : '';
+  }
+  var homeAllCats = false;
   function viewHome() {
     var today = F.todayStr(); var o = F.overview(today);
-    var upcoming = F.upcomingRecurring(today).slice(0, 3);
     var recent = F.monthTxs(curYm).slice(0, 5);
-    var bad = liveCount() && o.budget && (o.over || o.leftToday < 0);
-    var pct = o.budget ? Math.min(100, Math.round(o.spent / o.budget * 100)) : 0;
-    var meter = liveCount() && o.budget ? '<div class="hero-meter" role="img" aria-label="Витрачено ' + pct + '% бюджету"><i style="width:' + pct + '%"></i></div><p class="hero-meta"><span>' + money(o.spent) + ' витрачено</span><span>бюджет ' + money(o.budget) + '</span></p>' : '';
-    var h = top(cap(monthName(curYm))) + '<div class="hero-card' + (bad ? ' bad' : '') + '"><section class="hero" aria-live="polite">' + hero(o) + '</section>' + meter + stripHtml() + '</div>';
-    h += flowSection();
-    h += '<section class="sec"><div class="sec-h"><h2>Категорії</h2><button class="btn-text" data-act="budget">Бюджет</button></div><div class="panel">' + budgetRows(o) + '</div></section>';
-    h += shopsStrip() + limitsSection() + cardsSection();
-    if (upcoming.length) {
-      h += '<section class="sec"><div class="sec-h"><h2>Найближчі платежі</h2><button class="btn-text" data-act="recurring">Керувати</button></div><div class="panel"><ul class="ledger">' + upcoming.map(function (u) {
-        return '<li><div class="lrow"><span class="name">' + catDot(F.catById(u.rec.category)) + '<b>' + esc(u.rec.name) + '</b></span><span class="lead"></span><span class="val num">' + money(u.rec.amount) + '</span></div><p class="status">' + esc(dayMonthShort(u.date)) + '</p></li>';
-      }).join('') + '</ul></div></section>';
-    }
-    h += plansSection() + goalsSection() + loansSection();
+    var h = top(cap(monthName(curYm)), false, curYm.slice(0, 4)) + heroCard(o) + tilesSection();
+    var rows = budgetRows(o, homeAllCats ? 0 : 5);
+    h += '<section class="sec"><div class="sec-h"><h2>Категорії</h2><button class="btn-text" data-act="budget">Бюджет</button></div><div class="panel">' + rows +
+      (homeCatCount > 5 ? '<button class="more-row" data-act="home-cats" aria-expanded="' + homeAllCats + '">' + (homeAllCats ? 'Згорнути' : 'Показати всі ' + homeCatCount) + '</button>' : '') + '</div></section>';
+    h += shopsStrip() + limitsSection();
     if (recent.length) {
-      h += '<section class="sec"><div class="sec-h"><h2>Останні витрати</h2><button class="btn-text" data-act="tab" data-tab="list">Усі витрати</button></div><div class="panel">' + recent.map(txRowHtml).join('') + '</div></section>';
+      h += '<section class="sec"><div class="sec-h"><h2>Останні операції</h2><button class="btn-text" data-act="tab" data-tab="list">Усі</button></div><div class="panel">' + recent.map(txRowHtml).join('') + '</div></section>';
     }
+    return h;
+  }
+
+  // ---------- Гаманець: усе, де лежать або куди йдуть гроші ----------
+  function emptyRow(act, text) { return '<button class="add-row" data-act="' + act + '">' + ic('plus', 'sm') + '<span>' + text + '</span></button>'; }
+  function walletCards() {
+    var sm = F.cardsSummary(); var bp = F.byPay(curYm); var main = bp.items.filter(function (x) { return x.id === 'main'; })[0];
+    var out = '<article class="ccard main" role="listitem"><div class="cc-face"><span class="cc-top"><span class="cc-chip" aria-hidden="true"></span><span class="cc-kind">Основна карта</span></span>' +
+      '<span class="cc-debt"><small>Витрачено за ' + esc(monthName(curYm)) + '</small><b class="num">' + money(main ? main.total : 0) + '</b></span><span class="status">' + (main ? main.count + ' ' + plural(main.count, 'оплата', 'оплати', 'оплат') : 'Оплат цього місяця ще не було') + '</span></div>' +
+      '<div class="acts"><button class="btn alt sm" data-act="pay-find" data-p="main">Оплати з карти</button></div></article>';
+    out += sm.items.map(function (x, i) {
+      var over = x.debt < -0.005;
+      return '<article class="ccard s' + (i % 3) + '" role="listitem"><button class="cc-face" data-act="cards" aria-label="Історія кредитки ' + esc(x.card.name) + '"><span class="cc-top"><span class="cc-chip" aria-hidden="true"></span><span class="cc-kind">Кредитка</span></span>' +
+        '<span class="cc-name">' + esc(x.card.name) + '</span><span class="cc-debt"><small>' + (over ? 'Переплата' : 'Борг') + '</small><b class="num">' + money(Math.abs(x.debt) < 0.005 ? 0 : Math.abs(x.debt)) + '</b></span>' + cardMeter(x) + cardStatus(x) + '</button>' +
+        '<div class="acts"><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="1">' + ic('plus', 'sm') + 'Взяли</button><button class="btn alt sm" data-act="card-move" data-id="' + esc(x.card.id) + '" data-s="-1"' + (x.debt > 0.005 ? '' : ' disabled') + '>' + ic('check', 'sm') + 'Погасили</button></div></article>';
+    }).join('');
+    if (sm.items.length < F.MAX_CARDS) out += '<button class="ccard add" role="listitem" data-act="cards">' + ic('plus') + '<span>' + (sm.items.length ? 'Додати кредитку' : 'Додати першу кредитку') + '</span></button>';
+    return '<section class="sec"><div class="sec-h"><h2>Картки</h2>' + (sm.items.length ? '<button class="btn-text" data-act="cards">Історія</button>' : '') + '</div><div class="ccards" role="list">' + out + '</div></section>';
+  }
+  function viewWallet() {
+    var today = F.todayStr(); var S = F.state; var cs = F.cardsSummary(); var ls = S.cfg.loans.length ? F.loansSummary(today) : null;
+    var saved = S.cfg.goals.reduce(function (a, g) { return a + F.goalInfo(g, today).saved; }, 0); var debt = Math.round((cs.total + (ls ? ls.total : 0)) * 100) / 100;
+    var upcoming = F.upcomingRecurring(today).slice(0, 5); var plans = plansSection();
+    var h = top('Гаманець');
+    h += '<div class="wsum"><div class="ws' + (debt > 0 ? ' debt' : '') + '"><span>Треба повернути</span><b class="num">' + money(debt) + '</b><small>' + (debt > 0 ? 'кредитки ' + money(cs.total) + (ls ? ', кредити ' + money(ls.total) : '') : 'боргів немає') + '</small></div>' +
+      '<div class="ws"><span>Накопичено</span><b class="num">' + money(saved) + '</b><small>' + (S.cfg.goals.length ? S.cfg.goals.length + ' ' + plural(S.cfg.goals.length, 'ціль', 'цілі', 'цілей') : 'цілей ще немає') + '</small></div></div>';
+    h += walletCards();
+    h += '<section class="sec"><div class="sec-h"><h2>Кредити</h2>' + (ls ? '<button class="btn-text" data-act="loans">Керувати</button>' : '') + '</div><div class="panel">' + (ls ? loanRows() : emptyRow('loans', 'Додати кредит: залишок, платіж, дата закінчення')) + '</div></section>';
+    h += '<section class="sec"><div class="sec-h"><h2>Цілі накопичень</h2>' + (S.cfg.goals.length ? '<button class="btn-text" data-act="goals">Керувати</button>' : '') + '</div><div class="panel">' + (S.cfg.goals.length ? goalRows() : emptyRow('goals', 'Додати ціль: відпустка, резерв, велика покупка')) + '</div></section>';
+    h += '<section class="sec"><div class="sec-h"><h2>Регулярні платежі</h2>' + (S.cfg.recurring.length ? '<button class="btn-text" data-act="recurring">Керувати</button>' : '') + '</div><div class="panel">' + (upcoming.length ? '<ul class="ledger">' + upcoming.map(function (u) {
+      return '<li><div class="lrow"><span class="name">' + (BR.find(u.rec.name) ? BR.badge(u.rec.name, 'sm') : catDot(F.catById(u.rec.category))) + '<b>' + esc(u.rec.name) + '</b></span><span class="lead"></span><span class="val num">' + money(u.rec.amount) + '</span></div><p class="status">' + esc(dayMonthShort(u.date)) + '</p></li>';
+    }).join('') + '</ul>' : emptyRow('recurring', S.cfg.recurring.length ? 'Найближчих платежів немає. Відкрити список' : 'Додати платіж: оренда, інтернет, підписки')) + '</div></section>';
+    h += plans || '<section class="sec"><div class="sec-h"><h2>Заплановані витрати</h2></div><div class="panel">' + emptyRow('plans', 'Запланувати велику витрату, наприклад подарунки у грудні') + '</div></section>';
     return h;
   }
 
@@ -333,7 +414,7 @@
     }).join('') + '</div>';
   }
   function viewList() {
-    return top('Витрати') + listKindSeg() + '<label class="sr" for="q">Пошук</label><input class="in search" id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Пошук по нотатках і категоріях" value="' + esc(query) + '"><div id="list-body">' + listBody() + '</div>';
+    return top('Операції') + listKindSeg() + '<label class="sr" for="q">Пошук</label><input class="in search" id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Пошук по нотатках і категоріях" value="' + esc(query) + '"><div id="list-body">' + listBody() + '</div>';
   }
   function listBody() {
     var kind = listKind; var searching = query.trim().length >= 2;
@@ -452,7 +533,7 @@
     }).join('') + '</ul></div></section>';
   }
   function viewReports() {
-    var h = top('Звіти') + monthNav() + seg();
+    var h = top('Аналітика') + monthNav() + seg();
     var total = F.sum(F.monthTxs(ym));
     if (!total) return h + planFactHtml() + '<div class="empty"><b>Немає даних за ' + esc(monthName(ym)) + '</b>Додайте витрати або виберіть інший місяць.</div>';
     var spent = F.spentByCategory(ym);
@@ -556,37 +637,39 @@
     var hrs = Math.round(m / 60); if (hrs < 24) return hrs + ' год тому';
     return F.ymd(new Date(ts));
   }
+  function mrow(act, icon, t1, t2, chev) {
+    return '<li><button data-act="' + act + '"><span class="ico">' + ic(icon) + '</span><span class="grow"><span class="t1">' + t1 + '</span><span class="t2">' + t2 + '</span></span>' + (chev === false ? '' : '<span class="chev">' + ic('right', 'sm') + '</span>') + '</button></li>';
+  }
   function viewMore() {
-    var S = F.state; var h = top('Ще');
+    var S = F.state; var h = top('Налаштування', true);
     h += '<section class="sec" style="margin-top:6px"><div class="sec-h"><h2>Сім’я</h2></div><div class="panel">';
     h += '<label class="field" style="margin-top:10px"><span>Ваше ім’я у списку витрат</span><input class="in" id="me-name" maxlength="40" autocomplete="given-name" value="' + esc(S.me.name) + '" data-change="name"></label>';
     if (F.isConnected()) {
       h += '<p class="note' + (F.sync.status === 'error' || F.sync.status === 'offline' ? ' bad' : '') + '">' + esc(F.sync.error || ('Підключено до спільної таблиці. Остання синхронізація: ' + ago(S.me.lastSync) + '.')) + '</p>';
-      h += '<ul class="menu" style="margin-top:6px"><li><button data-act="sync"><span class="ico">' + ic('sync') + '</span><span class="grow"><span class="t1">Синхронізувати зараз</span><span class="t2">' + (F.dirtyCount() ? 'Чекає на надсилання: ' + F.dirtyCount() : 'Усе надіслано') + '</span></span></button></li>' +
-        '<li><button data-act="invite"><span class="ico">' + ic('share') + '</span><span class="grow"><span class="t1">Запросити родину</span><span class="t2">Посилання для підключення</span></span></button></li>' +
-        '<li><button data-act="disconnect"><span class="ico">' + ic('x') + '</span><span class="grow"><span class="t1">Відключити від таблиці</span><span class="t2">Дані лишаться на телефоні</span></span></button></li></ul>';
+      h += '<ul class="menu" style="margin-top:6px">' + mrow('sync', 'sync', 'Синхронізувати зараз', F.dirtyCount() ? 'Чекає на надсилання: ' + F.dirtyCount() : 'Усе надіслано', false) +
+        mrow('invite', 'share', 'Запросити родину', 'Посилання для підключення', false) + mrow('disconnect', 'x', 'Відключити від таблиці', 'Дані лишаться на телефоні', false) + '</ul>';
     } else {
       h += '<p class="note">Зараз витрати зберігаються лише на цьому телефоні. Підключіть спільну таблицю, щоб бачити витрати всієї родини.</p><button class="btn" data-act="open-connect">' + ic('users') + 'Підключити сім’ю</button>';
     }
     h += '</div></section>';
-    h += '<section class="sec"><div class="sec-h"><h2>Налаштування</h2></div><div class="panel"><ul class="menu">' +
-      '<li><button data-act="budget"><span class="ico">' + ic('sliders') + '</span><span class="grow"><span class="t1">Бюджет і категорії</span><span class="t2">' + (F.monthBudget().total ? 'Бюджет ' + money(F.monthBudget().total) + ' на місяць' : 'Бюджет не задано') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="recurring"><span class="ico">' + ic('repeat') + '</span><span class="grow"><span class="t1">Регулярні платежі</span><span class="t2">' + (S.cfg.recurring.length ? S.cfg.recurring.length + ' ' + plural(S.cfg.recurring.length, 'платіж', 'платежі', 'платежів') : 'Оренда, інтернет, підписки') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="shops"><span class="ico">' + ic('list') + '</span><span class="grow"><span class="t1">Магазини</span><span class="t2">' + (S.cfg.shops.length ? S.cfg.shops.length + ' ' + plural(S.cfg.shops.length, 'магазин', 'магазини', 'магазинів') + ' для швидкого вибору' : 'Додайте свої магазини') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="clubs"><span class="ico">' + ic('users') + '</span><span class="grow"><span class="t1">Гуртки дитини</span><span class="t2">' + (S.cfg.clubs.length ? S.cfg.clubs.length + ' ' + plural(S.cfg.clubs.length, 'гурток', 'гуртки', 'гуртків') + ' для швидкого вибору' : 'Футбол, англійська, танці…') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="places"><span class="ico">' + ic('list') + '</span><span class="grow"><span class="t1">Адреси для комунальних</span><span class="t2">' + ((S.cfg.places || []).length ? (S.cfg.places || []).join(', ') : 'Додайте адреси, де платите комуналку') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="plans"><span class="ico">' + ic('calendar') + '</span><span class="grow"><span class="t1">Заплановані витрати</span><span class="t2">' + (S.cfg.plans.length ? S.cfg.plans.length + ' ' + plural(S.cfg.plans.length, 'план', 'плани', 'планів') + (F.planGroups(F.todayStr()).filter(function (g) { return !g.past; }).length ? ', найближчий: ' + monthName(F.planGroups(F.todayStr()).filter(function (g) { return !g.past; })[0].ym) : '') : 'Наприклад, подарунки у грудні') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="goals"><span class="ico">' + ic('check') + '</span><span class="grow"><span class="t1">Цілі накопичень</span><span class="t2">' + (S.cfg.goals.length ? S.cfg.goals.length + ' ' + plural(S.cfg.goals.length, 'ціль', 'цілі', 'цілей') : 'Відпустка, резерв, велика покупка') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="loans"><span class="ico">' + ic('repeat') + '</span><span class="grow"><span class="t1">Кредити та картки</span><span class="t2">' + (S.cfg.loans.length ? 'Борг ' + money(F.loansSummary(F.todayStr()).total) : 'Залишок, дата закінчення, переплата') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="cards"><span class="ico">' + ic('card') + '</span><span class="grow"><span class="t1">Кредитки</span><span class="t2">' + (F.cards().length ? (F.cardsSummary().total > 0 ? 'Треба погасити ' + money(F.cardsSummary().total) : 'Боргу немає') : 'Взяли з кредитки й погасили') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="ai"><span class="ico">' + ic('sparkle') + '</span><span class="grow"><span class="t1">ШІ-аналіз</span><span class="t2">Питання про ваші витрати</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="key"><span class="ico">' + ic('sparkle') + '</span><span class="grow"><span class="t1">Розпізнавання чеків</span><span class="t2">' + ({ own: 'Ключ Gemini додано', nutriplan: 'Використовується ключ з NutriPlan', none: 'Потрібен ключ Gemini' }[F.keySource()]) + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
-      '<li><button data-act="pin"><span class="ico">' + ic('users') + '</span><span class="grow"><span class="t1">PIN-код</span><span class="t2">' + (F.hasPin() ? 'Увімкнено на цьому телефоні' : 'Закрити додаток від сторонніх') + '</span></span><span class="chev">' + ic('right', 'sm') + '</span></button></li>' +
+    h += '<section class="sec"><div class="sec-h"><h2>Бюджет і довідники</h2></div><div class="panel"><ul class="menu">' +
+      mrow('budget', 'sliders', 'Бюджет і категорії', F.monthBudget().total ? 'Бюджет ' + money(F.monthBudget().total) + ' на місяць' : 'Бюджет не задано') +
+      mrow('shops', 'cart', 'Магазини', S.cfg.shops.length ? S.cfg.shops.length + ' ' + plural(S.cfg.shops.length, 'магазин', 'магазини', 'магазинів') + ' для швидкого вибору' : 'Додайте свої магазини') +
+      mrow('clubs', 'users', 'Гуртки дитини', S.cfg.clubs.length ? S.cfg.clubs.length + ' ' + plural(S.cfg.clubs.length, 'гурток', 'гуртки', 'гуртків') + ' для швидкого вибору' : 'Футбол, англійська, танці…') +
+      mrow('places', 'list', 'Адреси для комунальних', (S.cfg.places || []).length ? esc((S.cfg.places || []).join(', ')) : 'Додайте адреси, де платите комуналку') +
+      mrow('tab" data-tab="wallet', 'card', 'Кредитки, кредити, цілі, платежі', 'Усе це тепер у розділі «Гаманець»') +
+      '</ul></div></section>';
+    h += '<section class="sec"><div class="sec-h"><h2>Помічники</h2></div><div class="panel"><ul class="menu">' +
+      mrow('ai', 'sparkle', 'ШІ-аналіз', 'Питання про ваші витрати') +
+      mrow('key', 'camera', 'Розпізнавання чеків', { own: 'Ключ Gemini додано', nutriplan: 'Використовується ключ з NutriPlan', none: 'Потрібен ключ Gemini' }[F.keySource()]) +
+      '<li><button data-act="real-icons" role="switch" aria-checked="' + BR.realOn() + '"><span class="ico">' + ic('cart') + '</span><span class="grow"><span class="t1">Справжні значки магазинів</span><span class="t2">' + (BR.realOn() ? 'Завантажуються із сайтів магазинів, потрібен інтернет' : 'Вимкнено: кольорові плашки з літерою') + '</span></span><i class="switch" aria-hidden="true"></i></button></li>' +
+      '</ul></div></section>';
+    h += '<section class="sec"><div class="sec-h"><h2>Безпека й дані</h2></div><div class="panel"><ul class="menu">' +
+      mrow('pin', 'lock', 'PIN-код', F.hasPin() ? 'Увімкнено на цьому телефоні' : 'Закрити додаток від сторонніх') +
+      mrow('export-json', 'download', 'Зберегти копію', S.meta.lastBackup ? 'Остання копія: ' + ago(S.meta.lastBackup) : 'Копії ще не було', false) +
+      mrow('import-json', 'upload', 'Відновити з копії', 'Додасть записи, яких тут немає', false) +
+      mrow('export-csv', 'list', 'Таблиця для Excel', 'Файл CSV з усіма витратами', false) +
       '</ul><label class="field"><span>Валюта</span><select class="in" id="cur" data-change="currency">' + F.CURRENCIES.map(function (c) { return '<option value="' + esc(c) + '"' + (c === cur() ? ' selected' : '') + '>' + esc(c + ' ' + ({ '₴': 'гривня', '$': 'долар', '€': 'євро', 'zł': 'злотий', '£': 'фунт' }[c])) + '</option>'; }).join('') + '</select></label><div style="height:14px"></div></div></section>';
-    h += '<section class="sec"><div class="sec-h"><h2>Копія даних</h2></div><div class="panel"><ul class="menu">' +
-      '<li><button data-act="export-json"><span class="ico">' + ic('download') + '</span><span class="grow"><span class="t1">Зберегти копію</span><span class="t2">' + (S.meta.lastBackup ? 'Остання копія: ' + ago(S.meta.lastBackup) : 'Копії ще не було') + '</span></span></button></li>' +
-      '<li><button data-act="import-json"><span class="ico">' + ic('upload') + '</span><span class="grow"><span class="t1">Відновити з копії</span><span class="t2">Додасть записи, яких тут немає</span></span></button></li>' +
-      '<li><button data-act="export-csv"><span class="ico">' + ic('list') + '</span><span class="grow"><span class="t1">Таблиця для Excel</span><span class="t2">Файл CSV з усіма витратами</span></span></button></li></ul></div></section>';
     if (F.saveFailed) h += '<p class="note bad">Телефон не дає зберегти дані: закінчилося місце. Збережіть копію й звільніть пам’ять.</p>';
     h += '<p class="note" style="text-align:center">Версія додатка: ' + esc(F.VERSION) + '</p>';
     h += '<input type="file" id="import-file" accept="application/json,.json" hidden>';
@@ -596,7 +679,7 @@
   // ---------- Закупки ----------
   function viewShopping() {
     var items = F.state.cfg.shopping || [];
-    var h = top('Закупки');
+    var h = top('Закупки', true);
     h += '<form class="buy-add" data-form="buy-add" autocomplete="off"><label class="sr" for="buy-new">Що треба купити</label>' +
       '<input class="in" id="buy-new" maxlength="60" enterkeyhint="done" placeholder="Що треба купити, наприклад: макарони">' +
       '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>';
@@ -613,7 +696,7 @@
     var n = $('#buy-new'); if (n && v) n.value = v;
   }
 
-  var VIEWS = { home: viewHome, list: viewList, reports: viewReports, shopping: viewShopping, more: viewMore, cat: viewCat };
+  var VIEWS = { home: viewHome, list: viewList, wallet: viewWallet, reports: viewReports, shopping: viewShopping, more: viewMore, cat: viewCat };
   function render() {
     $('#app').innerHTML = VIEWS[view]();
     $$('#tabs .tab').forEach(function (b) { if (attr(b, 'tab') === (view === 'cat' ? catFrom : view)) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
@@ -1236,6 +1319,12 @@
   });
   var ACT = {
     tab: function (el) { shopSel = null; setView(attr(el, 'tab')); },
+    go: function (el) { if (MAIN[view]) backTo = view; else if (view === 'cat') backTo = MAIN[catFrom] ? catFrom : 'home'; shopSel = null; setView(attr(el, 'v')); },
+    'go-back': function () { setView(MAIN[backTo] ? backTo : 'home'); },
+    'home-cats': function () { homeAllCats = !homeAllCats; render(); },
+    'add-income': function () { openTx(null, 'in_salary'); },
+    'pay-find': function (el) { shopSel = null; listKind = 'expense'; query = ''; catFilter = 'all'; payFilter = attr(el, 'p'); ym = curYm; setView('list'); },
+    'real-icons': function () { BR.setReal(!BR.realOn()); render(); },
     add: function () { openTx(null); },
     'tx-kind': function (el) {
       var form = $('form[data-form=tx]'); var k = attr(el, 'k'); form.setAttribute('data-kind', k);

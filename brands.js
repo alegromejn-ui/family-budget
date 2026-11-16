@@ -1,5 +1,5 @@
-/* Значки магазинів і сервісів. Це не офіційні логотипи, а стилізовані плашки у фірмових кольорах:
-   монограма на градієнті. Розпізнавання за початком назви (нотатки), працює офлайн, без картинок.
+/* Значки магазинів і сервісів. За наявності інтернету показується справжній значок із сайту магазину,
+   без інтернету — плашка у фірмових кольорах з літерою. Розпізнавання за початком назви (нотатки).
    Невідомий магазин отримує стабільний колір із назви, тому «Кубиха» завжди одного кольору. */
 (function (root) {
   'use strict';
@@ -74,13 +74,35 @@
     var ch = (n.match(/[A-Za-zА-Яа-яІіЇїЄєҐґ0-9]/) || ['•'])[0].toUpperCase();
     return { key: 'x' + (hash(n) % PAL.length), text: ch, c1: p[0], c2: p[1], fg: '#fff', kind: 'shop', generic: true };
   }
+  // ---------- Справжні значки ----------
+  // Значок береться із сайту самого магазину (його favicon) через сервіс значків. Нічого не намальовано вручну:
+  // якщо інтернету немає або значок не знайшовся, лишається кольорова плашка з літерою.
+  var DOM = { silpo: 'silpo.ua', atb: 'atbmarket.com', maudau: 'maudau.com.ua', fozzy: 'fozzy.ua', eva: 'eva.ua', avrora: 'avrora.ua', novus: 'novus.online', varus: 'varus.ua', metro: 'metro.ua', auchan: 'auchan.ua',
+    rozetka: 'rozetka.com.ua', epicentr: 'epicentrk.ua', foxtrot: 'foxtrot.com.ua', comfy: 'comfy.ua', jysk: 'jysk.ua', prostor: 'prostor.ua', np: 'novaposhta.ua', up: 'ukrposhta.ua', wog: 'wog.ua', okko: 'okko.ua',
+    socar: 'socar.ua', upg: 'upg.ua', shell: 'shell.ua', uklon: 'uklon.com.ua', bolt: 'bolt.eu', mono: 'monobank.ua', privat: 'privatbank.ua', kyivstar: 'kyivstar.ua', vodafone: 'vodafone.ua', lifecell: 'lifecell.ua',
+    netflix: 'netflix.com', spotify: 'spotify.com', youtube: 'youtube.com', apple: 'apple.com', google: 'google.com', mcd: 'mcdonalds.com', kfc: 'kfc.ua', puzata: 'puzatahata.ua' };
+  var REAL_KEY = 'fb_real_icons'; var okSet = {}, badSet = {};
+  function realOn() { try { return localStorage.getItem(REAL_KEY) !== '0'; } catch (e) { return true; } }
+  function setReal(on) { try { localStorage.setItem(REAL_KEY, on ? '1' : '0'); } catch (e) { /* пам’ять недоступна */ } }
+  function srcFor(key, n) { var d = DOM[key]; return n === 2 ? 'https://icons.duckduckgo.com/ip3/' + d + '.ico' : 'https://www.google.com/s2/favicons?domain=' + d + '&sz=128'; }
+  function markAll(key) { var list = document.querySelectorAll('.bico[data-brand="' + key + '"]'); for (var i = 0; i < list.length; i++) list[i].classList.add('real'); }
+  // Сервіс замість відсутнього значка віддає крихітний глобус 16×16: такий не показуємо
+  function imgOk(img) { var key = img.getAttribute('data-k'); if (img.naturalWidth < 32) return imgFail(img); okSet[key] = img.getAttribute('data-n') || '1'; markAll(key); }
+  function imgFail(img) {
+    var key = img.getAttribute('data-k');
+    if (img.getAttribute('data-n') !== '2') { img.setAttribute('data-n', '2'); img.src = srcFor(key, 2); return; }
+    badSet[key] = 1; if (img.parentNode) img.parentNode.removeChild(img);
+  }
   // size: '' | 'sm' | 'lg'
   function badge(name, size) {
     var b = resolve(name); if (!b) return '';
-    var len = b.text.length; var cls = 'bico' + (size ? ' ' + size : '') + ' l' + Math.min(len, 3) + (b.generic ? ' gen' : '') + ' k-' + b.kind;
-    return '<i class="' + cls + '" data-brand="' + esc(b.key) + '" style="--b1:' + b.c1 + ';--b2:' + b.c2 + ';--bf:' + b.fg + '" aria-hidden="true"><b>' + esc(b.text) + '</b></i>';
+    var real = !b.generic && DOM[b.key] && !badSet[b.key] && realOn();
+    var len = b.text.length; var cls = 'bico' + (size ? ' ' + size : '') + ' l' + Math.min(len, 3) + (b.generic ? ' gen' : '') + ' k-' + b.kind + (real && okSet[b.key] ? ' real' : '');
+    var n = real && okSet[b.key] === '2' ? 2 : 1;
+    return '<i class="' + cls + '" data-brand="' + esc(b.key) + '" style="--b1:' + b.c1 + ';--b2:' + b.c2 + ';--bf:' + b.fg + '" aria-hidden="true"><b>' + esc(b.text) + '</b>' +
+      (real ? '<img class="bimg" alt="" decoding="async" referrerpolicy="no-referrer" data-k="' + esc(b.key) + '" data-n="' + n + '" src="' + srcFor(b.key, n) + '" onload="FBBrand.imgOk(this)" onerror="FBBrand.imgFail(this)">' : '') + '</i>';
   }
   function color(name) { var b = resolve(name); return b ? b.c1 : null; }
 
-  root.FBBrand = { find: find, resolve: resolve, badge: badge, color: color };
+  root.FBBrand = { find: find, resolve: resolve, badge: badge, color: color, realOn: realOn, setReal: setReal, imgOk: imgOk, imgFail: imgFail };
 })(window);

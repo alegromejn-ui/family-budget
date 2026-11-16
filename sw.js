@@ -1,9 +1,11 @@
 /* Сервісний воркер: додаток відкривається без інтернету.
    Сторінка береться з мережі (щоб оновлення приходили), а коли мережі немає, з кешу.
    Запити до таблиці й до Gemini сюди не потрапляють: вони йдуть на інші адреси. */
-const VERSION = 'family-budget-v34';
-const SHELL = ['./', 'index.html', 'styles.css', 'fx.css', 'brands.css', 'brands.js', 'pop.js', 'core.js', 'ui.js', 'fx.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
-  'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2'];
+const VERSION = 'family-budget-v35';
+const ICONS = 'family-budget-icons-1';
+const SHELL = ['./', 'index.html', 'styles.css', 'fx.css', 'brands.css', 'neo.css', 'brands.js', 'pop.js', 'core.js', 'ui.js', 'fx.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
+  'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2',
+  'fonts/unbounded-cyrillic-wght-normal.woff2', 'fonts/unbounded-cyrillic-ext-wght-normal.woff2', 'fonts/unbounded-latin-wght-normal.woff2'];
 
 // Відповідь після перенаправлення не можна віддавати як сторінку, тому перед збереженням робимо чисту копію
 function clean(res) {
@@ -21,12 +23,17 @@ self.addEventListener('install', e => {
   ))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== ICONS).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // Значки магазинів з інших сайтів: спершу збережена копія, тож вони видно й без інтернету
+  if (url.hostname === 'www.google.com' && url.pathname === '/s2/favicons' || /\.gstatic\.com$/.test(url.hostname) && /favicon/i.test(url.pathname) || url.hostname === 'icons.duckduckgo.com') {
+    e.respondWith(caches.open(ICONS).then(c => c.match(req.url).then(hit => hit || fetch(req).then(res => { if (res && (res.ok || res.type === 'opaque')) c.put(req.url, res.clone()); return res; }))));
+    return;
+  }
   if (url.origin !== self.location.origin) return;
   if (req.mode === 'navigate') {
     e.respondWith(navigate(req));

@@ -1,9 +1,11 @@
 /* Сервісний воркер: додаток відкривається без інтернету.
    Сторінка береться з мережі (щоб оновлення приходили), а коли мережі немає, з кешу.
    Запити до таблиці й до Gemini сюди не потрапляють: вони йдуть на інші адреси. */
-const VERSION = 'family-budget-v35';
+const VERSION = 'family-budget-v36';
+// Номер у адресах файлів: після оновлення телефон не може підставити старий файл із кешу замість нового
+const V = '?v=36';
 const ICONS = 'family-budget-icons-1';
-const SHELL = ['./', 'index.html', 'styles.css', 'fx.css', 'brands.css', 'neo.css', 'brands.js', 'pop.js', 'core.js', 'ui.js', 'fx.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
+const SHELL = ['./', 'index.html', 'styles.css' + V, 'fx.css' + V, 'brands.css' + V, 'neo.css' + V, 'brands.js' + V, 'pop.js' + V, 'core.js' + V, 'ui.js' + V, 'fx.js' + V, 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2',
   'fonts/unbounded-cyrillic-wght-normal.woff2', 'fonts/unbounded-cyrillic-ext-wght-normal.woff2', 'fonts/unbounded-latin-wght-normal.woff2'];
 
@@ -13,7 +15,7 @@ function clean(res) {
   return res.blob().then(b => new Response(b, { status: res.status, statusText: res.statusText, headers: res.headers }));
 }
 // Головні файли обов’язкові, решта (шрифти, іконки) зберігається за можливості: одна невдача не ламає офлайн-режим
-const CORE = ['index.html', 'styles.css', 'core.js', 'ui.js'];
+const CORE = ['index.html', 'styles.css' + V, 'core.js' + V, 'ui.js' + V];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => Promise.all(SHELL.map(u =>
     fetch(new Request(u, { cache: 'reload' })).then(clean).then(res => {

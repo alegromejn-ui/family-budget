@@ -81,6 +81,11 @@
     rozetka: 'rozetka.com.ua', epicentr: 'epicentrk.ua', foxtrot: 'foxtrot.com.ua', comfy: 'comfy.ua', jysk: 'jysk.ua', prostor: 'prostor.ua', np: 'novaposhta.ua', up: 'ukrposhta.ua', wog: 'wog.ua', okko: 'okko.ua',
     socar: 'socar.ua', upg: 'upg.ua', shell: 'shell.ua', uklon: 'uklon.com.ua', bolt: 'bolt.eu', mono: 'monobank.ua', privat: 'privatbank.ua', kyivstar: 'kyivstar.ua', vodafone: 'vodafone.ua', lifecell: 'lifecell.ua',
     netflix: 'netflix.com', spotify: 'spotify.com', youtube: 'youtube.com', apple: 'apple.com', google: 'google.com', mcd: 'mcdonalds.com', kfc: 'kfc.ua', puzata: 'puzatahata.ua' };
+  // Власні значки (малюнок замість літери). Це не офіційний логотип, а запасний знак на випадок, коли справжній значок із сайту магазину не завантажився:
+  // «Аврора» — богиня світанку, тому сонце, що сходить над горизонтом. Працює без інтернету.
+  var ICONS = {
+    avrora: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.2 16.5a5.8 5.8 0 0 1 11.6 0"/><path d="M2.5 16.5h19"/><path d="M12 5.2v2.2M4.9 8.6l1.5 1.5M19.1 8.6l-1.5 1.5M2.8 12.4h1.9M19.3 12.4h1.9"/><path d="M7 20h10" opacity=".65"/></svg>'
+  };
   var REAL_KEY = 'fb_real_icons'; var okSet = {}, badSet = {};
   function realOn() { try { return localStorage.getItem(REAL_KEY) !== '0'; } catch (e) { return true; } }
   function setReal(on) { try { localStorage.setItem(REAL_KEY, on ? '1' : '0'); } catch (e) { /* пам’ять недоступна */ } }
@@ -96,10 +101,11 @@
   // size: '' | 'sm' | 'lg'
   function badge(name, size) {
     var b = resolve(name); if (!b) return '';
+    var own = ICONS[b.key] || '';
     var real = !b.generic && DOM[b.key] && !badSet[b.key] && realOn();
-    var len = b.text.length; var cls = 'bico' + (size ? ' ' + size : '') + ' l' + Math.min(len, 3) + (b.generic ? ' gen' : '') + ' k-' + b.kind + (real && okSet[b.key] ? ' real' : '');
+    var len = b.text.length; var cls = 'bico' + (size ? ' ' + size : '') + ' l' + Math.min(len, 3) + (b.generic ? ' gen' : '') + (own ? ' own' : '') + ' k-' + b.kind + (real && okSet[b.key] ? ' real' : '');
     var n = real && okSet[b.key] === '2' ? 2 : 1;
-    return '<i class="' + cls + '" data-brand="' + esc(b.key) + '" style="--b1:' + b.c1 + ';--b2:' + b.c2 + ';--bf:' + b.fg + '" aria-hidden="true"><b>' + esc(b.text) + '</b>' +
+    return '<i class="' + cls + '" data-brand="' + esc(b.key) + '" style="--b1:' + b.c1 + ';--b2:' + b.c2 + ';--bf:' + b.fg + '" aria-hidden="true">' + (own ? own : '<b>' + esc(b.text) + '</b>') +
       (real ? '<img class="bimg" alt="" decoding="async" referrerpolicy="no-referrer" data-k="' + esc(b.key) + '" data-n="' + n + '" src="' + srcFor(b.key, n) + '" onload="FBBrand.imgOk(this)" onerror="FBBrand.imgFail(this)">' : '') + '</i>';
   }
   function color(name) { var b = resolve(name); return b ? b.c1 : null; }

@@ -69,3 +69,7 @@
 
 @media (prefers-reduced-motion: reduce) { .rip, .spark, .shopcard .sbar i { animation: none !important; } .bico, .chip, .shopcard { transition: none !important; } }
 .bwrap .bico b { transform: translate(-2px,-2px); }
+
+/* Власний намальований значок (SVG) */
+.bico.own svg { position: relative; z-index: 1; width: 62%; height: 62%; }
+.bico.sm.own svg { width: 66%; height: 66%; }

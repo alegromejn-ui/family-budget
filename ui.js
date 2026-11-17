@@ -830,9 +830,10 @@
       '<p class="note" id="tx-sign"' + (kind === 'saving' ? '' : ' hidden') + '>Мінус означає зняття з цілі, наприклад -500.</p>' +
       '<p class="note bad" id="tx-err" role="alert" hidden></p>' +
       payRowHtml(kind, t ? F.payOf(t) : (F.state.meta.lastPay || 'main'), curCard, legacyCard) +
-      (quickList.length ? '<div class="quick" id="tx-quick" role="group" aria-label="Часті витрати"' + (kind === 'expense' ? '' : ' hidden') + '>' + quickList.map(function (q, n) {
-        var c = F.catById(q.category); return '<button type="button" class="chip" data-act="quick" data-i="' + n + '">' + catDot(c) + esc((q.note || c.name) + ' ' + money(q.amount)) + '</button>';
-      }).join('') + '</div>' : '') +
+      (quickList.length ? '<div class="tagrow" id="tx-quick"' + (kind === 'expense' ? '' : ' hidden') + '><p class="lbl">Повторити недавню витрату</p><div class="quick" role="group" aria-label="Повторити недавню витрату">' + quickList.map(function (q, n) {
+        var c = F.catById(q.category); return '<button type="button" class="chip rep" data-act="quick" data-i="' + n + '" aria-label="Повторити: ' + esc((q.note || c.name) + ', ' + money(q.amount) + ', категорія ' + c.name) + '">' + ic('repeat', 'sm') + esc((q.note || c.name) + ' ' + money(q.amount)) + '</button>';
+      }).join('') + '</div></div>' : '') +
+      (quickList.length ? '<p class="lbl" style="margin-top:16px">Категорія</p>' : '') +
       '<div class="catgrid" id="tx-cats" role="radiogroup" aria-label="Категорія">' + catGridHtml(kind, selId, t) + '</div>' +
       subRowHtml(kind, selId, t) +
       tagRows(kind, t, selId) +

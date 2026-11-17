@@ -36,8 +36,8 @@
     home: [['elec', 'Світло'], ['gas', 'Газ'], ['water', 'Вода'], ['heat', 'Опалення'], ['net', 'Інтернет і ТБ'], ['phone', 'Мобільний зв\u2019язок']],
     household: [['chem', 'Побутова хімія'], ['hyg', 'Гігієна'], ['hair', 'Перукарня'], ['repair', 'Ремонт та інструменти'], ['tech', 'Техніка'], ['decor', 'Меблі й декор']],
     health: [['pharm', 'Ліки'], ['doctor', 'Лікарі й аналізи'], ['dent', 'Стоматолог'], ['vit', 'Вітаміни']],
-    kids: [['school', 'Школа й садок'], ['clubs', 'Гуртки й секції'], ['toys', 'Іграшки'], ['clothes', 'Одяг і взуття'], ['stationery', 'Канцтовари'], ['trifles', 'Дурниці']],
-    clothes: [['clothes', 'Одяг'], ['shoes', 'Взуття'], ['acc', 'Аксесуари']],
+    kids: [['school', 'Школа й садок'], ['clubs', 'Гуртки й секції'], ['toys', 'Іграшки'], ['stationery', 'Канцтовари'], ['trifles', 'Дурниці']],
+    clothes: [['adult', 'Дорослий'], ['child', 'Дитячий']],
     fun: [['cinema', 'Кіно й розваги'], ['hobby', 'Хобі'], ['trip', 'Відпочинок і подорожі']],
     gifts: [['bday', 'День народження'], ['holiday', 'Свята']],
     subs: [['tv', 'TV'], ['youtube', 'YouTube'], ['ai', 'AI']],
@@ -285,7 +285,7 @@
       if (changed && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
     }
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
-    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; migrateFunSplit(true); S.meta.mSubsV2 = 1; return; }
+    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; migrateFunSplit(true); S.meta.mSubsV2 = 1; migrateClothesV5(true); return; }
     // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
     if (!S.meta.mHousehold) {
       S.meta.mHousehold = 1; var cats = S.cfg.categories;
@@ -317,6 +317,7 @@
     migrateSubsV2();
     migrateSubsV3();
     migrateSubsV4();
+    migrateClothesV5(false);
   }
 
   // «Розваги й подарунки» розділено на «Розваги», «Подарунки» та «Підписки».
@@ -396,6 +397,45 @@
       if (keep.length !== S.cfg.otherSubs.length) { S.cfg.otherSubs = keep; changed = true; }
     }
     S.meta.mSubsV4 = 1; if (changed) touchCfg(); else save();
+  }
+  // Увесь одяг в одному місці: з «Дітей» прибираємо вид «Одяг і взуття», а його записи переносимо в «Одяг та взуття» з видом «Дитячий».
+  // Усередині одягу види «Дорослий» і «Дитячий». Старі види «Одяг», «Взуття», «Аксесуари» лишаються, лише якщо за ними вже є записи.
+  // Міграція безпечна для повторного запуску: працює, лише коли в «Дітях» ще лишився вид одягу чи записи з ним
+  // (наприклад, коли спільні налаштування прийшли зі старого телефона).
+  var CLOTHES_LEGACY = [['clothes', 'Одяг'], ['shoes', 'Взуття'], ['acc', 'Аксесуари']];
+  function migrateClothesV5(untouched) {
+    var cats = S.cfg.categories; var kids = cats.filter(function (c) { return c.id === 'kids'; })[0];
+    var isKidsClothes = function (y) { return y.id === 'clothes' || /^одяг і взуття$/i.test(String(y.name).trim()); };
+    var kidsSub = kids && Array.isArray(kids.subs) ? kids.subs.filter(isKidsClothes)[0] : null; var kidsSubId = kidsSub ? kidsSub.id : 'clothes';
+    var moved = Object.keys(S.txs).filter(function (k) { var t = S.txs[k]; return !t.deleted && t.category === 'kids' && subIdOfCn(t.cn) === kidsSubId; });
+    var clothes = cats.filter(function (c) { return c.id === 'clothes'; })[0]; var cfgChanged = false;
+    // Налаштування ще не чіпали: набір уже стандартний, лише не губимо старі види одягу, за якими є записи
+    if (untouched && clothes) {
+      CLOTHES_LEGACY.forEach(function (x) { if (subUsage('clothes', x[0]) > 0 && !clothes.subs.some(function (y) { return y.id === x[0]; })) clothes.subs.push({ id: x[0], name: x[1] }); });
+    }
+    if (!kidsSub && !moved.length) return;
+    if (!clothes) {
+      if (cats.length >= MAX_COLORED) return; // немає місця для категорії: нічого не чіпаємо, спробуємо після видалення зайвої
+      clothes = { id: 'clothes', name: 'Одяг та взуття', colorIdx: freeColor(cats, 10), limit: null, subs: [] }; cats.push(clothes); cfgChanged = true;
+    }
+    clothes.subs = Array.isArray(clothes.subs) ? clothes.subs : [];
+    [['adult', 'Дорослий'], ['child', 'Дитячий']].forEach(function (x) {
+      if (clothes.subs.some(function (y) { return y.id === x[0]; })) return;
+      var same = clothes.subs.filter(function (y) { return y.name.toLowerCase() === x[1].toLowerCase(); })[0];
+      if (same) { x[0] = same.id; return; }
+      if (clothes.subs.length < MAX_SUBS) { clothes.subs.unshift({ id: x[0], name: x[1] }); cfgChanged = true; }
+    });
+    var childId = (clothes.subs.filter(function (y) { return y.id === 'child' || /^дитяч/i.test(y.name); })[0] || {}).id || '';
+    // Старі стандартні види без записів прибираємо, щоб у одязі лишилося лише «Дорослий» та «Дитячий»
+    CLOTHES_LEGACY.forEach(function (x) {
+      if (clothes.subs.some(function (y) { return y.id === x[0]; }) && subUsage('clothes', x[0]) === 0) { clothes.subs = clothes.subs.filter(function (y) { return y.id !== x[0]; }); cfgChanged = true; }
+    });
+    moved.forEach(function (k) {
+      var t = S.txs[k]; t.category = 'clothes'; t.cn = buildCn(clothes.name, childId, payOfCn(t.cn), cardOfCn(t.cn)); t.updatedAt = stamp(t.updatedAt); t.dirty = true;
+    });
+    if (kidsSub) { kids.subs = kids.subs.filter(function (y) { return !isKidsClothes(y); }); cfgChanged = true; }
+    if (cfgChanged && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
+    if (moved.length) scheduleSync();
   }
   // Після завантаження спільних налаштувань зі старого телефона нових категорій там може не бути: повертаємо, якщо на них є записи
   function repairSplitCats() {
@@ -1149,13 +1189,13 @@
         var remoteU = Number(data.config.updatedAt) || 0;
         try {
           var parsed = JSON.parse(data.config.json); parsed.updatedAt = remoteU; var remoteCfg = normalizeCfg(parsed);
-          if (!S.cfgDirty) { S.cfg = remoteCfg; S.cfgBase = remoteU; repairSplitCats(); }
+          if (!S.cfgDirty) { S.cfg = remoteCfg; S.cfgBase = remoteU; repairSplitCats(); migrateClothesV5(false); }
           else {
             // На сервері вже є чужа версія, а в нас є ще не надіслані правки: список закупок зливаємо, решту бере новіша версія
             var m = mergeShopping(remoteCfg, S.cfg);
             var winner = remoteU >= S.cfg.updatedAt ? remoteCfg : S.cfg;
             S.cfg = Object.assign({}, winner, { shopping: m.shopping, shopGone: m.shopGone, updatedAt: stamp(Math.max(remoteU, S.cfg.updatedAt)) });
-            S.cfgBase = remoteU; S.cfgDirty = true; repairSplitCats();
+            S.cfgBase = remoteU; S.cfgDirty = true; repairSplitCats(); migrateClothesV5(false);
           }
         } catch (pe) { /* пошкоджені налаштування ігноруємо */ }
       } else if (cfgSent) { S.cfgBase = cfgSent.updatedAt; if (S.cfg.updatedAt === cfgSent.updatedAt) S.cfgDirty = false; }
@@ -1523,7 +1563,7 @@
     // копії
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v45', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v38', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

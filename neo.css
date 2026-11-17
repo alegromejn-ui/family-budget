@@ -200,3 +200,8 @@ body.fx-hide .tile b, body.fx-hide .ws b, body.fx-hide .ws small, body.fx-hide .
   .ring .time, .ring .spend, .pill.spin .ic { animation: none; }
   .tile, .cc-face, .hbtn, .backbtn, .avatar, .switch, .switch::after { transition: none; }
 }
+
+/* Швидкий повтор витрати: пунктирна кнопка без кольорової іконки категорії, щоб її не плутати з категоріями */
+.quick .chip.rep { background: transparent; box-shadow: none; border: 1.5px dashed var(--line); color: var(--ink); }
+.quick .chip.rep .ic { color: var(--accent); flex: none; }
+.quick .chip.rep:active { background: var(--accent-wash); }

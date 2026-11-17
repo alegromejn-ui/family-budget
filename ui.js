@@ -142,7 +142,7 @@
     var c = F.catInfo(t); var sb = F.subOf(t); var cname = c.name + (sb ? ' · ' + sb.name : ''); var title = t.note || cname;
     var sub = esc((t.note ? cname + ', ' : '') + (t.member || '')); var pi = c.kind === 'expense' ? F.payInfo(F.payOf(t)) : null;
     if (pi) sub += (sub ? ' · ' : '') + '<i class="paytag ' + pi.id + '">' + esc(pi.short + (F.cardOf(t) && F.cardById(F.cardOf(t)) ? ': ' + F.cardById(F.cardOf(t)).name : '')) + '</i>';
-    var amt = c.kind === 'income' ? signedMoney(t.amount) : c.kind === 'saving' ? (t.amount < 0 ? 'зняття ' + money(-t.amount) : signedMoney(t.amount)) : c.kind === 'card' ? (t.amount < 0 ? 'погасили ' + money(-t.amount) : 'взяли ' + money(t.amount)) : money(t.amount);
+    var amt = c.kind === 'income' ? signedMoney(t.amount) : c.kind === 'saving' ? (t.amount < 0 ? 'зняття ' + money(-t.amount) : signedMoney(t.amount)) : c.kind === 'card' ? (t.amount < 0 ? 'погасили ' + money(-t.amount) : 'взяли ' + money(t.amount)) : c.kind === 'lend' ? (t.amount < 0 ? 'повернули ' + money(-t.amount) : 'дали ' + money(t.amount)) : money(t.amount);
     return '<button class="txrow" data-act="edit" data-id="' + esc(t.id) + '">' + txLead(t, c) + '<span class="main"><b>' + esc(title) + '</b><span>' + sub + '</span></span><span class="amt num">' + esc(amt) + '</span></button>';
   }
 
@@ -273,6 +273,27 @@
       '<button class="btn" type="submit">' + (sign > 0 ? 'Записати: взяли' : 'Записати: погасили') + '</button></form>';
     openSheet(html, { focus: '#cm-amount' });
   }
+  function lendHistory(person) {
+    var list = F.lendTxs(person).slice(0, 8); if (!list.length) return '';
+    return '<h3 class="sub-h">Записи</h3><ul class="ledger cardhist">' + list.map(function (t) {
+      return '<li><div class="lrow"><span class="name"><span class="hd">' + esc(dayMonthShort(t.date)) + '</span><b>' + (t.amount < 0 ? 'Повернули' : 'Дали в борг') + '</b></span><span class="lead"></span><span class="val num">' + (t.amount < 0 ? '−' : '+') + money(Math.abs(t.amount)) +
+        '</span><button class="iconbtn" data-act="lend-tx-del" data-id="' + esc(t.id) + '" data-p="' + esc(person) + '" aria-label="Видалити запис від ' + esc(dayMonthShort(t.date)) + '">' + ic('trash', 'sm') + '</button></div></li>';
+    }).join('') + '</ul>';
+  }
+  // person: ім’я, якщо відоме (кнопки біля людини); sign: 1 — дали в борг, -1 — нам повернули
+  function openLendMove(person, sign, keep) {
+    person = person || ''; var owed = 0; F.lendSummary().items.forEach(function (x) { if (person && x.name.toLowerCase() === person.toLowerCase()) owed = x.owed; });
+    var names = F.lendSummary().items.map(function (x) { return x.name; });
+    var html = '<form data-form="lend-move" data-s="' + sign + '" novalidate>' + sheetTop(sign > 0 ? 'Дали в борг' : 'Нам повернули гроші', sign > 0 ? 'Це не витрата: сума не потрапить у витрати й бюджет, а людина з’явиться у списку «Нам винні».' : 'Борг людини зменшиться. Це не дохід: гроші просто повертаються.') +
+      '<label class="field"><span>' + (sign > 0 ? 'Кому' : 'Хто повернув') + '</span><input class="in" id="lm-name" maxlength="40" autocomplete="off" list="lm-names" placeholder="Ім’я" value="' + esc(person) + '"' + (sign < 0 && person ? ' readonly' : '') + '></label>' +
+      '<datalist id="lm-names">' + names.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' +
+      '<div class="amount-wrap"><input class="amount-in" id="lm-amount" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Сума"><span class="cur">' + esc(cur()) + '</span></div>' +
+      (sign < 0 && owed > 0.005 ? '<p class="note"><button type="button" class="btn-text" data-act="lend-all" data-v="' + esc(String(owed).replace('.', ',')) + '">Увесь борг: ' + money(owed) + '</button></p>' : '') +
+      '<p class="note bad" id="lm-err" role="alert" hidden></p>' +
+      '<label class="field"><span>Дата</span><input class="in" type="date" id="lm-date" value="' + esc(F.todayStr()) + '"></label>' +
+      '<button class="btn" type="submit">' + (sign > 0 ? 'Записати: дали' : 'Записати: повернули') + '</button>' + (person ? lendHistory(person) : '') + '</form>';
+    openSheet(html, { keepScroll: keep, focus: person ? '#lm-amount' : '#lm-name' });
+  }
   function openCardDebt(id) {
     var cd = F.cardById(id); if (!cd) return;
     var html = '<form data-form="card-debt" data-id="' + esc(id) + '" novalidate>' + sheetTop('Уточнити борг: ' + cd.name, 'Введіть борг за випискою банку. Додаток запише різницю, щоб сума збіглася.') +
@@ -330,6 +351,7 @@
     } else if (liveCount()) out.push(tile('add-income', '', 'in', 'Доходи', 'Додати', 'щоб бачити залишок місяця', 'ghost'));
     var cs = F.cardsSummary(); var ls = F.state.cfg.loans.length ? F.loansSummary(today).total : 0; var debt = Math.round((cs.total + ls) * 100) / 100;
     if (debt > 0) out.push(tile('tab', ' data-tab="wallet"', 'card', 'Борги', money(debt), cs.total > 0 ? 'кредитки ' + money(cs.total) : 'кредити', 'debt'));
+    var lsum = F.lendSummary(); if (lsum.total > 0) out.push(tile('tab', ' data-tab="wallet"', 'users', 'Нам винні', money(lsum.total), lsum.items.length + ' ' + plural(lsum.items.length, 'людина', 'людини', 'людей')));
     var up = F.upcomingRecurring(today)[0];
     if (up) out.push(tile('tab', ' data-tab="wallet"', 'calendar', 'Найближчий платіж', money(up.rec.amount), esc(up.rec.name) + ', ' + esc(dayMonthShort(up.date))));
     var goals = F.state.cfg.goals;
@@ -367,6 +389,18 @@
     if (sm.items.length < F.MAX_CARDS) out += '<button class="ccard add" role="listitem" data-act="cards">' + ic('plus') + '<span>' + (sm.items.length ? 'Додати кредитку' : 'Додати першу кредитку') + '</span></button>';
     return '<section class="sec"><div class="sec-h"><h2>Картки</h2>' + (sm.items.length ? '<button class="btn-text" data-act="cards">Історія</button>' : '') + '</div><div class="ccards" role="list">' + out + '</div></section>';
   }
+  function lendSection() {
+    var ls = F.lendSummary();
+    var h = '<section class="sec"><div class="sec-h"><h2>Нам винні</h2>' + (ls.items.length ? '<button class="btn-text" data-act="lend-move" data-s="1">' + ic('plus', 'sm') + 'Дали в борг</button>' : '') + '</div><div class="panel">';
+    if (!ls.items.length) return h + emptyRow('lend-move', 'Дали комусь у борг? Запишіть, щоб не забути, і не рахувати це витратою') + '</div></section>';
+    h += '<ul class="ledger">' + ls.items.map(function (x) {
+      var over = x.owed < 0;
+      return '<li><div class="lrow"><span class="name"><span class="who" aria-hidden="true">' + esc(x.name.charAt(0).toUpperCase()) + '</span><b>' + esc(x.name) + '</b></span><span class="lead"></span><span class="val num' + (over ? '' : ' badtxt') + '">' + money(Math.abs(x.owed)) + '</span></div>' +
+        '<p class="status">' + (over ? 'Повернули більше, ніж брали. ' : '') + 'Останній запис: ' + esc(dayMonthShort(x.last.date)) + '</p>' +
+        '<div class="acts"><button class="btn alt sm" data-act="lend-move" data-p="' + esc(x.name) + '" data-s="-1">' + ic('check', 'sm') + 'Повернули</button><button class="btn alt sm" data-act="lend-move" data-p="' + esc(x.name) + '" data-s="1">' + ic('plus', 'sm') + 'Ще дали</button></div></li>';
+    }).join('') + '</ul>';
+    return h + '</div></section>';
+  }
   function viewWallet() {
     var today = F.todayStr(); var S = F.state; var cs = F.cardsSummary(); var ls = S.cfg.loans.length ? F.loansSummary(today) : null;
     var saved = S.cfg.goals.reduce(function (a, g) { return a + F.goalInfo(g, today).saved; }, 0); var debt = Math.round((cs.total + (ls ? ls.total : 0)) * 100) / 100;
@@ -374,7 +408,7 @@
     var h = top('Гаманець');
     h += '<div class="wsum"><div class="ws' + (debt > 0 ? ' debt' : '') + '"><span>Треба повернути</span><b class="num">' + money(debt) + '</b><small>' + (debt > 0 ? 'кредитки ' + money(cs.total) + (ls ? ', кредити ' + money(ls.total) : '') : 'боргів немає') + '</small></div>' +
       '<div class="ws"><span>Накопичено</span><b class="num">' + money(saved) + '</b><small>' + (S.cfg.goals.length ? S.cfg.goals.length + ' ' + plural(S.cfg.goals.length, 'ціль', 'цілі', 'цілей') : 'цілей ще немає') + '</small></div></div>';
-    h += walletCards();
+    h += walletCards() + lendSection();
     h += '<section class="sec"><div class="sec-h"><h2>Кредити</h2>' + (ls ? '<button class="btn-text" data-act="loans">Керувати</button>' : '') + '</div><div class="panel">' + (ls ? loanRows() : emptyRow('loans', 'Додати кредит: залишок, платіж, дата закінчення')) + '</div></section>';
     h += '<section class="sec"><div class="sec-h"><h2>Цілі накопичень</h2>' + (S.cfg.goals.length ? '<button class="btn-text" data-act="goals">Керувати</button>' : '') + '</div><div class="panel">' + (S.cfg.goals.length ? goalRows() : emptyRow('goals', 'Додати ціль: відпустка, резерв, велика покупка')) + '</div></section>';
     h += '<section class="sec"><div class="sec-h"><h2>Регулярні платежі</h2>' + (S.cfg.recurring.length ? '<button class="btn-text" data-act="recurring">Керувати</button>' : '') + '</div><div class="panel">' + (upcoming.length ? '<ul class="ledger">' + upcoming.map(function (u) {
@@ -662,7 +696,7 @@
     h += '<section class="sec"><div class="sec-h"><h2>Помічники</h2></div><div class="panel"><ul class="menu">' +
       mrow('ai', 'sparkle', 'ШІ-аналіз', 'Питання про ваші витрати') +
       mrow('key', 'camera', 'Розпізнавання чеків', { own: 'Ключ Gemini додано', nutriplan: 'Використовується ключ з NutriPlan', none: 'Потрібен ключ Gemini' }[F.keySource()]) +
-      '<li><button data-act="real-icons" role="switch" aria-checked="' + BR.realOn() + '"><span class="ico">' + ic('cart') + '</span><span class="grow"><span class="t1">Справжні значки магазинів</span><span class="t2">' + (BR.realOn() ? 'Завантажуються із сайтів магазинів, потрібен інтернет' : 'Вимкнено: кольорові плашки з літерою') + '</span></span><i class="switch" aria-hidden="true"></i></button></li>' +
+      '<li><button data-act="real-icons" role="switch" aria-checked="' + BR.realOn() + '"><span class="ico">' + ic('cart') + '</span><span class="grow"><span class="t1">Справжні значки магазинів</span><span class="t2">' + (BR.realOn() ? 'Завантажуються із сайтів магазинів, потрібен інтернет' : 'Вимкнено: кольорові плашки з літерою') + '</span></span><i class="tgl" aria-hidden="true"></i></button></li>' +
       '</ul></div></section>';
     h += '<section class="sec"><div class="sec-h"><h2>Безпека й дані</h2></div><div class="panel"><ul class="menu">' +
       mrow('pin', 'lock', 'PIN-код', F.hasPin() ? 'Увімкнено на цьому телефоні' : 'Закрити додаток від сторонніх') +
@@ -1064,6 +1098,7 @@
       '<label class="field"><span>Відсотки річних</span><input class="in" id="l-rate" inputmode="decimal" placeholder="Необов’язково" value="' + (e && e.rate ? esc(String(e.rate).replace('.', ',')) : '') + '"></label></div>' +
       '<div class="row2"><label class="field"><span>Платіж на місяць</span><input class="in" id="l-pay" inputmode="decimal" value="' + (e && e.payment ? esc(String(e.payment).replace('.', ',')) : '') + '"></label>' +
       '<label class="field"><span>День платежу</span><input class="in" id="l-day" inputmode="numeric" maxlength="2" placeholder="1-31" value="' + (e ? e.day : '') + '"></label></div>' +
+      '<label class="switch"><input type="checkbox" id="l-incl"' + (!e || e.incl ? ' checked' : '') + '><span>Залишок уже з відсотками, як показує банк</span></label><p class="note" style="margin-top:0">Якщо позначено, відсотки річних не потрібні: додаток просто ділить залишок на платежі. Зніміть позначку, якщо вказали лише суму боргу без відсотків: тоді додаток сам додасть відсотки.</p>' +
       (e ? '' : '<label class="switch"><input type="checkbox" id="l-auto" checked><span>Записувати платіж автоматично кожного місяця</span></label>') +
       '<p class="note bad" id="l-err" role="alert" hidden></p>' +
       '<button class="btn" type="submit">' + (e ? 'Зберегти зміни' : 'Додати') + '</button>' + (e ? '<button type="button" class="btn alt" data-act="loan-cancel">Скасувати зміни</button><button type="button" class="btn danger" data-act="loan-del" data-id="' + esc(e.id) + '">' + ic('trash', 'sm') + 'Видалити</button>' : '') + '</form>';
@@ -1401,6 +1436,9 @@
     'card-edit': function (el) { openCards(attr(el, 'id'), false); var f = $('#cc-name'); if (f) { if (f.scrollIntoView) f.scrollIntoView({ block: 'center' }); f.focus(); } },
     'card-cancel': function () { openCards(null, true); },
     'card-del': function (el) { var r = F.removeCard(attr(el, 'id')); if (r.error) return showErr('cc-err', r.error); openCards(null, true); render(); toast('Кредитку видалено'); },
+    'lend-move': function (el) { openLendMove(attr(el, 'p'), Number(attr(el, 's')) || 1); },
+    'lend-all': function (el) { var a = $('#lm-amount'); if (a) { a.value = attr(el, 'v'); a.focus(); } },
+    'lend-tx-del': function (el) { var tid = attr(el, 'id'); var who = attr(el, 'p'); F.setDeleted(tid, true); openLendMove(who, 1, true); render(); toast('Запис видалено', 'Повернути', function () { F.setDeleted(tid, false); if ($('.sheet')) openLendMove(who, 1, true); render(); }); },
     'card-all': function (el) { var a = $('#cm-amount'); if (a) { a.value = attr(el, 'v'); a.focus(); } },
     'card-tx-del': function (el) { var tid = attr(el, 'id'); F.setDeleted(tid, true); openCards(null, true); render(); toast('Запис видалено', 'Повернути', function () { F.setDeleted(tid, false); if ($('.sheet')) openCards(null, true); render(); }); },
     loans: function () { openLoans(); },
@@ -1516,7 +1554,7 @@
       var mr = F.addContribution(mid, sg * amt, $('#gm-date').value, $('#gm-note').value); if (mr.error) return showErr('gm-err', mr.error);
       openGoals(null, false); render(); toast(sg > 0 ? 'Внесок записано' : 'Знято з цілі', 'Скасувати', function () { F.setDeleted(mr.tx.id, true); render(); });
     } else if (kind === 'loan') {
-      var lid = attr(form, 'id'); var lp = { name: $('#l-name').value, kind: $('#l-kind').value, balance: $('#l-balance').value, rate: $('#l-rate').value, payment: $('#l-pay').value, day: $('#l-day').value };
+      var lid = attr(form, 'id'); var lp = { name: $('#l-name').value, kind: $('#l-kind').value, balance: $('#l-balance').value, rate: $('#l-rate').value, payment: $('#l-pay').value, day: $('#l-day').value, incl: $('#l-incl').checked };
       if (!lid) lp.auto = $('#l-auto').checked;
       var lr = lid ? F.updateLoan(lid, lp) : F.addLoan(lp); if (lr.error) return showErr('l-err', lr.error);
       openLoans(null, false); render(); toast(lid ? 'Збережено' : 'Додано');
@@ -1524,6 +1562,13 @@
       var cid0 = attr(form, 'id'); var cp = { name: $('#cc-name').value, limit: $('#cc-limit').value };
       var cr = cid0 ? F.updateCard(cid0, cp) : F.addCard(cp); if (cr.error) return showErr('cc-err', cr.error);
       openCards(null, false); render(); toast(cid0 ? 'Збережено' : 'Кредитку додано');
+    } else if (kind === 'lend-move') {
+      var ls0 = Number(attr(form, 's')); var lname = $('#lm-name').value; var lamt = F.parseAmount($('#lm-amount').value);
+      if (!String(lname).trim()) return showErr('lm-err', 'Вкажіть, кому дали гроші.');
+      if (lamt == null) return showErr('lm-err', 'Введіть суму більше нуля.');
+      var lr0 = F.lendMove(lname, ls0, lamt, $('#lm-date').value); if (lr0.error) return showErr('lm-err', lr0.error);
+      closeSheet(); render(); var lleft = 0; F.lendSummary().items.forEach(function (x) { if (x.name.toLowerCase() === String(lname).replace(/\s+/g, ' ').trim().toLowerCase()) lleft = x.owed; });
+      toast(ls0 > 0 ? 'Записано: дали ' + money(lamt) + '. Винні ' + money(Math.max(0, lleft)) : (lleft > 0.005 ? 'Повернули ' + money(lamt) + '. Лишилось ' + money(lleft) : 'Борг повернули повністю'), 'Скасувати', function () { F.setDeleted(lr0.tx.id, true); render(); });
     } else if (kind === 'card-move') {
       var kid = attr(form, 'id'); var ks = Number(attr(form, 's')); var kamt = F.parseAmount($('#cm-amount').value);
       if (kamt == null) return showErr('cm-err', 'Введіть суму більше нуля.');

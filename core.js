@@ -41,7 +41,7 @@
     fun: [['cinema', 'Кіно й розваги'], ['hobby', 'Хобі'], ['trip', 'Відпочинок і подорожі']],
     gifts: [['bday', 'День народження'], ['holiday', 'Свята']],
     subs: [['tv', 'TV'], ['youtube', 'YouTube'], ['ai', 'AI']],
-    borrow: [['repay', 'Повернення боргу'], ['lend', 'Дали в борг']]
+    borrow: [['repay', 'Віддали борг']]
   };
   function defaultSubs(catId) { return (DEFAULT_SUBS[catId] || []).map(function (x) { return { id: x[0], name: x[1] }; }); }
   function cloneCats() { return DEFAULT_CATS.map(function (c) { return Object.assign({}, c, { subs: defaultSubs(c.id) }); }); }
@@ -190,7 +190,7 @@
         return { id: String(g.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24), name: String(g.name || 'Ціль').slice(0, 40), target: parseAmount(g.target), deadline: /^\d{4}-\d{2}$/.test(g.deadline) ? g.deadline : '' };
       }) : [],
       loans: Array.isArray(c.loans) ? c.loans.filter(function (l) { return l && l.id; }).slice(0, 20).map(function (l) {
-        return { id: String(l.id).slice(0, 30), name: String(l.name || 'Кредит').slice(0, 40), kind: l.kind === 'card' ? 'card' : 'loan', balance: Math.max(0, round2(Number(l.balance) || 0)), start: Math.max(0, round2(Number(l.start) || Number(l.balance) || 0)), asOf: isDateStr(l.asOf) ? l.asOf : todayStr(), rate: Math.min(200, Math.max(0, Number(l.rate) || 0)), payment: Math.max(0, round2(Number(l.payment) || 0)), day: Math.min(31, Math.max(1, Math.round(Number(l.day)) || 1)), recId: String(l.recId || '') };
+        return { id: String(l.id).slice(0, 30), name: String(l.name || 'Кредит').slice(0, 40), kind: l.kind === 'card' ? 'card' : 'loan', balance: Math.max(0, round2(Number(l.balance) || 0)), start: Math.max(0, round2(Number(l.start) || Number(l.balance) || 0)), asOf: isDateStr(l.asOf) ? l.asOf : todayStr(), rate: Math.min(200, Math.max(0, Number(l.rate) || 0)), payment: Math.max(0, round2(Number(l.payment) || 0)), day: Math.min(31, Math.max(1, Math.round(Number(l.day)) || 1)), recId: String(l.recId || ''), incl: l.incl === true || l.incl === 1 || l.incl === 'true' };
       }) : [],
       budgets: cleanMap(c.budgets, /^\d{4}-\d{2}$/, 60),
       memberLimits: cleanMap(c.memberLimits, /^.{1,40}$/, 30),
@@ -285,7 +285,7 @@
       if (changed && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
     }
     // Налаштування, які ніхто не змінював, оновлюємо до поточного стандартного набору категорій
-    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; migrateFunSplit(true); S.meta.mSubsV2 = 1; migrateClothesV5(true); return; }
+    if (S.cfg.updatedAt === 0 && !S.cfgDirty) { S.cfg.categories = cloneCats(); S.meta.mHousehold = 1; S.meta.mClothes = 1; S.meta.mBorrow = 1; migrateFunSplit(true); S.meta.mSubsV2 = 1; migrateClothesV5(true); migrateLendV6(); return; }
     // Один раз додаємо «Побут і господарство» до вже налаштованого набору (якщо є місце й такої категорії ще немає)
     if (!S.meta.mHousehold) {
       S.meta.mHousehold = 1; var cats = S.cfg.categories;
@@ -318,6 +318,7 @@
     migrateSubsV3();
     migrateSubsV4();
     migrateClothesV5(false);
+    migrateLendV6();
   }
 
   // «Розваги й подарунки» розділено на «Розваги», «Подарунки» та «Підписки».
@@ -436,6 +437,28 @@
     if (kidsSub) { kids.subs = kids.subs.filter(function (y) { return !isKidsClothes(y); }); cfgChanged = true; }
     if (cfgChanged && !(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save();
     if (moved.length) scheduleSync();
+  }
+  // «Дали в борг» більше не витрата: записи з категорії «Позики» з видами «Дали в борг» і «Повернення боргу» стають записами
+  // обліку «Нам винні» (дали: плюс, повернули: мінус; ім’я людини береться з нотатки). Безпечно для повторного запуску.
+  function migrateLendV6() {
+    var borrow = S.cfg.categories.filter(function (c) { return c.id === 'borrow'; })[0];
+    var lendSub = borrow && Array.isArray(borrow.subs) ? borrow.subs.filter(function (y) { return y.id === 'lend' || /^дали в борг$/i.test(String(y.name).trim()); })[0] : null;
+    var repaySub = borrow && Array.isArray(borrow.subs) ? borrow.subs.filter(function (y) { return y.id === 'repay' || /^повернення боргу$/i.test(String(y.name).trim()); })[0] : null;
+    var lendId = lendSub ? lendSub.id : 'lend', repayId = repaySub ? repaySub.id : 'repay'; var changed = 0; var first = !S.meta.mLendV6;
+    // «Дали в борг» переносимо завжди (такого виду в витратах більше немає), «Повернення боргу» лише один раз:
+    // далі цей вид означає, що ми самі віддали чужий борг, і це звичайна витрата
+    Object.keys(S.txs).forEach(function (k) {
+      var t = S.txs[k]; if (t.deleted || t.category !== 'borrow') return; var sb = subIdOfCn(t.cn); if (sb !== lendId && !(first && sb === repayId)) return;
+      var back = sb === repayId && sb !== lendId;
+      t.category = 'lend'; t.amount = round2(back ? -Math.abs(t.amount) : Math.abs(t.amount)); t.note = lendName(t.note) || 'Без імені';
+      t.cn = buildCn('Позика людям', '', '', ''); t.updatedAt = stamp(t.updatedAt); t.dirty = true; changed++;
+    });
+    var cfgCh = false;
+    if (lendSub) { borrow.subs = borrow.subs.filter(function (y) { return y !== lendSub; }); cfgCh = true; }
+    if (first && repaySub && /^повернення боргу$/i.test(String(repaySub.name).trim())) { repaySub.name = 'Віддали борг'; cfgCh = true; }
+    S.meta.mLendV6 = 1;
+    if (changed) { save(); scheduleSync(); }
+    if (cfgCh) { if (!(S.cfg.updatedAt === 0 && !S.cfgDirty)) touchCfg(); else save(); } else save();
   }
   // Після завантаження спільних налаштувань зі старого телефона нових категорій там може не бути: повертаємо, якщо на них є записи
   function repairSplitCats() {
@@ -582,15 +605,16 @@
     if (/^in_/.test(id)) { var ic = INCOME_CATS.filter(function (x) { return x.id === id; })[0] || INCOME_CATS[INCOME_CATS.length - 1]; return { id: ic.id, name: ic.name, colorIdx: -2, kind: 'income' }; }
     if (/^sv_/.test(id)) { var g = goalById(id.slice(3)); return { id: id, name: g ? g.name : (fallbackName || 'Накопичення'), colorIdx: -3, kind: 'saving', missing: !g }; }
     if (/^cc_/.test(id)) { var cd = cardById(id.slice(3)); return { id: id, name: 'Кредитка: ' + (cd ? cd.name : (String(fallbackName || '').replace(/^Кредитка: /, '') || 'видалена')), colorIdx: -4, kind: 'card', missing: !cd }; }
+    if (id === 'lend') return { id: 'lend', name: 'Позика людям', colorIdx: -5, kind: 'lend' };
     var c = catById(id, fallbackName); return { id: c.id, name: c.name, colorIdx: c.colorIdx, limit: c.limit, kind: 'expense' };
   }
   function catInfo(t) { return resolveCat(t.category, t.cn); }
-  function kindOf(t) { return /^in_/.test(t.category) ? 'income' : /^sv_/.test(t.category) ? 'saving' : /^cc_/.test(t.category) ? 'card' : 'expense'; }
+  function kindOf(t) { return /^in_/.test(t.category) ? 'income' : /^sv_/.test(t.category) ? 'saving' : /^cc_/.test(t.category) ? 'card' : t.category === 'lend' ? 'lend' : 'expense'; }
   function addTx(p) {
     var cat = resolveCat(p.category, '');
     if (cat.kind === 'saving' && cat.missing) return { error: 'Цілі не знайдено.' };
     if (cat.kind === 'card' && cat.missing) return { error: 'Кредитку не знайдено.' };
-    var amount = parseAmount(p.amount, cat.kind === 'saving' || cat.kind === 'card');
+    var amount = parseAmount(p.amount, cat.kind === 'saving' || cat.kind === 'card' || cat.kind === 'lend');
     if (amount == null) return { error: cat.kind === 'saving' ? 'Введіть суму (мінус означає зняття).' : 'Введіть суму більше нуля.' };
     var date = p.date || todayStr();
     if (!isDateStr(date)) return { error: 'Вкажіть дату.' };
@@ -604,7 +628,7 @@
     var t = S.txs[id]; if (!t) return { error: 'Запис не знайдено.' };
     var before = Object.assign({}, t);
     var cat = resolveCat(p.category, t.cn);
-    var amount = parseAmount(p.amount, cat.kind === 'saving' || cat.kind === 'card'); if (amount == null) return { error: cat.kind === 'saving' ? 'Введіть суму (мінус означає зняття).' : 'Введіть суму більше нуля.' };
+    var amount = parseAmount(p.amount, cat.kind === 'saving' || cat.kind === 'card' || cat.kind === 'lend'); if (amount == null) return { error: cat.kind === 'saving' ? 'Введіть суму (мінус означає зняття).' : 'Введіть суму більше нуля.' };
     if (!isDateStr(p.date)) return { error: 'Вкажіть дату.' };
     // категорію, якої вже немає, не перейменовуємо мовчки
     var keepName = (cat.id === 'other' && p.category !== 'other') || cat.missing;
@@ -723,8 +747,8 @@
     return INCOME_CATS.filter(function (c) { return m[c.id]; }).map(function (c) { return m[c.id]; });
   }
   function monthFlow(ym) {
-    var income = sum(monthKind(ym, 'income')); var spent = sum(monthTxs(ym)); var saved = sum(monthKind(ym, 'saving'));
-    return { income: income, spent: spent, saved: saved, balance: round2(income - spent - saved) };
+    var income = sum(monthKind(ym, 'income')); var spent = sum(monthTxs(ym)); var saved = sum(monthKind(ym, 'saving')); var lent = sum(monthKind(ym, 'lend'));
+    return { income: income, spent: spent, saved: saved, lent: lent, balance: round2(income - spent - saved - lent) };
   }
 
   // Місячний бюджет: для місяця може бути свій, інакше загальний, а якщо його немає, сума лімітів категорій
@@ -860,7 +884,8 @@
   function loanById(id) { return S.cfg.loans.filter(function (l) { return l.id === id; })[0]; }
   // Орієнтовний графік: щомісяця нараховуються відсотки на залишок, потім іде платіж
   function loanInfo(l, today) {
-    var r = (l.rate || 0) / 100 / 12; var bal = l.balance; var balNow = bal; var o = { balanceNow: bal, payoffYm: null, monthsLeft: 0, interestLeft: 0, totalLeft: 0, never: false, noPlan: !(l.payment > 0) };
+    // Залишок «з відсотками» (як у банку): відсотки вже всередині платежів, тож їх не нараховуємо вдруге
+    var r = l.incl ? 0 : (l.rate || 0) / 100 / 12; var bal = l.balance; var balNow = bal; var o = { balanceNow: bal, payoffYm: null, monthsLeft: 0, interestLeft: 0, totalLeft: 0, never: false, noPlan: !(l.payment > 0) };
     if (bal <= 0.005) { o.balanceNow = 0; return o; }
     if (o.noPlan) return o;
     var ym = ymOf(l.asOf);
@@ -869,6 +894,8 @@
       var interest = bal * r;
       if (r > 0 && l.payment <= interest + 0.005) { o.never = true; break; }
       var pay = Math.min(l.payment, bal + interest); bal = bal + interest - pay;
+      // Банк округлює платіж до гривні (6 223 ₴ у два платежі = 3 111,50), тому залишок у кілька гривень вважаємо частиною цього платежу, а не окремим платежем
+      if (bal > 0.005 && bal <= Math.min(20, Math.max(2, l.payment * 0.002))) { pay += bal; bal = 0; }
       if (due <= today) balNow = bal; else { o.monthsLeft++; o.interestLeft += interest; o.totalLeft += pay; }
       if (bal <= 0.005) { o.payoffYm = ym; if (due <= today) balNow = 0; break; }
     }
@@ -888,12 +915,13 @@
     if (!partial || p.payment !== undefined) { var pay = String(p.payment == null ? '' : p.payment).trim() === '' ? 0 : parseAmount(p.payment); if (pay == null) return { error: 'Щомісячний платіж має бути додатним числом.' }; out.payment = pay; }
     if (!partial || p.day !== undefined) { var d = Math.round(Number(p.day)); if (!(d >= 1 && d <= 31)) return { error: 'День платежу має бути від 1 до 31.' }; out.day = d; }
     if (p.kind !== undefined) out.kind = p.kind === 'card' ? 'card' : 'loan';
+    if (p.incl !== undefined) out.incl = !!p.incl;
     return out;
   }
   function addLoan(p) {
     if (S.cfg.loans.length >= 20) return { error: 'Забагато кредитів.' };
     var f = loanFields(p, false); if (f.error) return f;
-    var today = todayStr(); var l = { id: 'l_' + rid(6), name: f.name, kind: p.kind === 'card' ? 'card' : 'loan', balance: f.balance, start: f.balance, asOf: today, rate: f.rate, payment: f.payment, day: f.day, recId: '' };
+    var today = todayStr(); var l = { id: 'l_' + rid(6), name: f.name, kind: p.kind === 'card' ? 'card' : 'loan', balance: f.balance, start: f.balance, asOf: today, rate: f.rate, payment: f.payment, day: f.day, recId: '', incl: !!f.incl };
     if (p.auto) {
       if (!(l.payment > 0)) return { error: 'Щоб записувати платіж автоматично, вкажіть його суму.' };
       var startMonth = dueDate({ day: l.day }, ymOf(today)) <= today ? addMonths(ymOf(today), 1) : ymOf(today);
@@ -939,6 +967,28 @@
     var cd = cardById(id); if (!cd) return { error: 'Кредитку не знайдено.' };
     var a = parseAmount(amount); if (a == null) return { error: 'Введіть суму більше нуля.' };
     return addTx({ amount: sign < 0 ? -a : a, category: 'cc_' + id, date: date, note: note || '' });
+  }
+  // ---------- Позичили людям ----------
+  // Запис «Позика людям» (категорія lend): сума з плюсом — дали в борг, з мінусом — нам повернули, у нотатці ім’я людини.
+  // Це не витрата: у звіті витрат і бюджеті таких записів немає, а борг людини рахується як сума її записів.
+  function lendKey(n) { return String(n == null ? '' : n).replace(/\s+/g, ' ').trim().toLowerCase(); }
+  function lendName(n) { return String(n == null ? '' : n).replace(/\s+/g, ' ').trim().slice(0, 40); }
+  function lendTxs(person) { var k = person == null ? null : lendKey(person); return allLive().filter(function (t) { return t.category === 'lend' && (k === null || lendKey(t.note) === k); }).sort(byDateDesc); }
+  function lendSummary() {
+    var m = {}, order = [];
+    lendTxs().forEach(function (t) {
+      var k = lendKey(t.note);
+      if (!m[k]) { m[k] = { name: lendName(t.note) || 'Без імені', owed: 0, last: t }; order.push(k); }
+      m[k].owed = round2(m[k].owed + t.amount);
+    });
+    var items = order.map(function (k) { return m[k]; }).filter(function (x) { return Math.abs(x.owed) > 0.005; }).sort(function (a, b) { return b.owed - a.owed; });
+    return { total: round2(items.reduce(function (s0, x) { return s0 + Math.max(0, x.owed); }, 0)), items: items };
+  }
+  // sign: 1 — дали в борг, -1 — нам повернули
+  function lendMove(person, sign, amount, date) {
+    var name = lendName(person); if (!name) return { error: 'Вкажіть, кому дали гроші.' };
+    var a = parseAmount(amount); if (a == null) return { error: 'Введіть суму більше нуля.' };
+    return addTx({ amount: sign < 0 ? -a : a, category: 'lend', date: date, note: name });
   }
   // Уточнити борг за випискою: записується різниця, тож історія лишається
   function setCardDebt(id, value) {
@@ -1189,13 +1239,13 @@
         var remoteU = Number(data.config.updatedAt) || 0;
         try {
           var parsed = JSON.parse(data.config.json); parsed.updatedAt = remoteU; var remoteCfg = normalizeCfg(parsed);
-          if (!S.cfgDirty) { S.cfg = remoteCfg; S.cfgBase = remoteU; repairSplitCats(); migrateClothesV5(false); }
+          if (!S.cfgDirty) { S.cfg = remoteCfg; S.cfgBase = remoteU; repairSplitCats(); migrateClothesV5(false); migrateLendV6(); }
           else {
             // На сервері вже є чужа версія, а в нас є ще не надіслані правки: список закупок зливаємо, решту бере новіша версія
             var m = mergeShopping(remoteCfg, S.cfg);
             var winner = remoteU >= S.cfg.updatedAt ? remoteCfg : S.cfg;
             S.cfg = Object.assign({}, winner, { shopping: m.shopping, shopGone: m.shopGone, updatedAt: stamp(Math.max(remoteU, S.cfg.updatedAt)) });
-            S.cfgBase = remoteU; S.cfgDirty = true; repairSplitCats(); migrateClothesV5(false);
+            S.cfgBase = remoteU; S.cfgDirty = true; repairSplitCats(); migrateClothesV5(false); migrateLendV6();
           }
         } catch (pe) { /* пошкоджені налаштування ігноруємо */ }
       } else if (cfgSent) { S.cfgBase = cfgSent.updatedAt; if (S.cfg.updatedAt === cfgSent.updatedAt) S.cfgDirty = false; }
@@ -1271,7 +1321,7 @@
   function exportCSV() {
     function q(v) { v = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(v)) v = '’' + v; return '"' + v.replace(/"/g, '""') + '"'; }
     var rows = [['Дата', 'Сума', 'Категорія', 'Нотатка', 'Хто', 'Тип', 'Вид', 'Картка']];
-    var KIND = { expense: 'Витрата', income: 'Дохід', saving: 'Накопичення', card: 'Кредитка' };
+    var KIND = { expense: 'Витрата', income: 'Дохід', saving: 'Накопичення', card: 'Кредитка', lend: 'Позика людям' };
     allLive().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.updatedAt - b.updatedAt; }).forEach(function (t) {
       rows.push([t.date, String(t.amount).replace('.', ','), catInfo(t).name, t.note, t.member, KIND[kindOf(t)], (subOf(t) || { name: '' }).name, (payInfo(payOf(t)) || { name: '' }).name + (cardById(cardOf(t)) ? ': ' + cardById(cardOf(t)).name : '')]);
     });
@@ -1561,9 +1611,9 @@
     // синхронізація
     isConnected: isConnected, syncNow: syncNow, scheduleSync: scheduleSync, dirtyCount: dirtyCount, makeInvite: makeInvite, parseInvite: parseInvite, connect: connect, disconnect: disconnect, validUrl: validUrl,
     // копії
-    exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
+    lendSummary: lendSummary, lendMove: lendMove, lendTxs: lendTxs, exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v38', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v41', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

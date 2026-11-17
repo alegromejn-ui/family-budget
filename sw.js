@@ -1,10 +1,10 @@
 /* Сервісний воркер: додаток відкривається без інтернету.
    Сторінка береться з мережі (щоб оновлення приходили), а коли мережі немає, з кешу.
    Запити до таблиці й до Gemini сюди не потрапляють: вони йдуть на інші адреси. */
-const VERSION = 'family-budget-v41';
+const VERSION = 'family-budget-v42';
 // Номер у адресах файлів: після оновлення телефон не може підставити старий файл із кешу замість нового
-const V = '?v=41';
-const ICONS = 'family-budget-icons-1';
+const V = '?v=42';
+const ICONS = 'family-budget-icons-2';
 const SHELL = ['./', 'index.html', 'styles.css' + V, 'fx.css' + V, 'brands.css' + V, 'neo.css' + V, 'brands.js' + V, 'pop.js' + V, 'core.js' + V, 'ui.js' + V, 'fx.js' + V, 'manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png',
   'fonts/onest-cyrillic-ext-wght-normal.woff2', 'fonts/onest-cyrillic-wght-normal.woff2', 'fonts/onest-latin-ext-wght-normal.woff2', 'fonts/onest-latin-wght-normal.woff2',
   'fonts/unbounded-cyrillic-wght-normal.woff2', 'fonts/unbounded-cyrillic-ext-wght-normal.woff2', 'fonts/unbounded-latin-wght-normal.woff2'];
@@ -33,7 +33,12 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   // Значки магазинів з інших сайтів: спершу збережена копія, тож вони видно й без інтернету
   if (url.hostname === 'www.google.com' && url.pathname === '/s2/favicons' || /\.gstatic\.com$/.test(url.hostname) && /favicon/i.test(url.pathname) || url.hostname === 'icons.duckduckgo.com') {
-    e.respondWith(caches.open(ICONS).then(c => c.match(req.url).then(hit => hit || fetch(req).then(res => { if (res && (res.ok || res.type === 'opaque')) c.put(req.url, res.clone()); return res; }))));
+    // Збережена копія показується одразу, а нова підвантажується фоном і замінює стару: невдалий значок не застрягає назавжди
+    e.respondWith(caches.open(ICONS).then(c => c.match(req.url).then(hit => {
+      const net = fetch(req).then(res => { if (res && (res.ok || res.type === 'opaque')) c.put(req.url, res.clone()); return res; });
+      if (hit) { net.catch(() => {}); return hit; }
+      return net;
+    })));
     return;
   }
   if (url.origin !== self.location.origin) return;

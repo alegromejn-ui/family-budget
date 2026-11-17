@@ -11,7 +11,7 @@
     ['maudau', /^(maudau|маудау)/i, 'M', '#7B4DFF', '#5B2EE0', '#fff', 'online'],
     ['fozzy', /^(fozzy|фоззі|фози)/i, 'F', '#F0323A', '#C81D26', '#fff', 'grocery'],
     ['eva', /^eva\b|^єва\b|^ева\b/i, 'EVA', '#12B76A', '#0A8F50', '#fff', 'drugstore'],
-    ['avrora', /^(аврора|avrora)/i, 'A', '#D6338A', '#A61E68', '#fff', 'shop'],
+    ['avrora', /^(аврора|avrora)/i, 'А', '#FFD400', '#FFC000', '#E3001B', 'shop'],
     ['novus', /^(novus|новус)/i, 'N', '#E5322D', '#B91F1B', '#fff', 'grocery'],
     ['varus', /^(varus|варус)/i, 'V', '#2FA84F', '#1F8438', '#fff', 'grocery'],
     ['metro', /^(metro|метро)\b/i, 'M', '#1A4E9C', '#0E3470', '#FFD100', 'grocery'],
@@ -77,7 +77,7 @@
   // ---------- Справжні значки ----------
   // Значок береться із сайту самого магазину (його favicon) через сервіс значків. Нічого не намальовано вручну:
   // якщо інтернету немає або значок не знайшовся, лишається кольорова плашка з літерою.
-  var DOM = { silpo: 'silpo.ua', atb: 'atbmarket.com', maudau: 'maudau.com.ua', fozzy: 'fozzy.ua', eva: 'eva.ua', avrora: 'avrora.ua', novus: 'novus.online', varus: 'varus.ua', metro: 'metro.ua', auchan: 'auchan.ua',
+  var DOM = { silpo: 'silpo.ua', atb: 'atbmarket.com', maudau: 'maudau.com.ua', fozzy: 'fozzy.ua', eva: 'eva.ua', novus: 'novus.online', varus: 'varus.ua', metro: 'metro.ua', auchan: 'auchan.ua',
     rozetka: 'rozetka.com.ua', epicentr: 'epicentrk.ua', foxtrot: 'foxtrot.com.ua', comfy: 'comfy.ua', jysk: 'jysk.ua', prostor: 'prostor.ua', np: 'novaposhta.ua', up: 'ukrposhta.ua', wog: 'wog.ua', okko: 'okko.ua',
     socar: 'socar.ua', upg: 'upg.ua', shell: 'shell.ua', uklon: 'uklon.com.ua', bolt: 'bolt.eu', mono: 'monobank.ua', privat: 'privatbank.ua', kyivstar: 'kyivstar.ua', vodafone: 'vodafone.ua', lifecell: 'lifecell.ua',
     netflix: 'netflix.com', spotify: 'spotify.com', youtube: 'youtube.com', apple: 'apple.com', google: 'google.com', mcd: 'mcdonalds.com', kfc: 'kfc.ua', puzata: 'puzatahata.ua' };

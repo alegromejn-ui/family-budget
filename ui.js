@@ -711,15 +711,15 @@
   }
 
   // ---------- Закупки ----------
-  var buyKind = 'food';
+  var buyKind = 'food'; // без заголовка пункт іде в «Продукти»; «Побут…:» у тексті перемикає розділ
   var BUY_KINDS = [['food', 'Продукти'], ['home', 'Побут і господарство']];
   function viewShopping() {
     var items = F.state.cfg.shopping || [];
     var h = top('Закупки', true);
     h += '<form class="buy-add" data-form="buy-add" autocomplete="off"><label class="sr" for="buy-new">Що треба купити</label>' +
       '<textarea class="in" id="buy-new" rows="2" maxlength="2000" placeholder="Що треба купити. Можна кілька рядків із заголовками:&#10;Продукти:&#10;хліб&#10;Побут:&#10;туалетний папір"></textarea>' +
-      '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>' +
-      '<div class="seg full" role="group" aria-label="Куди додати">' + BUY_KINDS.map(function (k) { return '<button type="button" data-act="buy-kind" data-k="' + k[0] + '" aria-pressed="' + (buyKind === k[0]) + '">' + k[1] + '</button>'; }).join('') + '</div>';
+      '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>';
+
     if (!items.length) return h + '<div class="empty"><b>Список порожній</b>Додайте, що треба купити. Купили: поставте галочку, і пункт зникне. У витрати й звіти ці записи не потрапляють.</div>';
     h += '<section class="sec"><div class="sec-h"><h2>Треба купити</h2><span class="note" style="margin:0">' + items.length + '</span></div><div class="panel">';
     BUY_KINDS.forEach(function (k) {
@@ -1429,7 +1429,6 @@
     'goal-edit': function (el) { openGoals(attr(el, 'id'), false); var f = $('#g-name'); if (f) f.focus(); },
     'goal-cancel': function () { openGoals(null, true); },
     'goal-del': function (el) { if (confirm('Видалити ціль? Уже записані внески лишаться в історії.')) { F.removeGoal(attr(el, 'id')); openGoals(null, true); render(); } },
-    'buy-kind': function (el) { buyKind = attr(el, 'k') === 'home' ? 'home' : 'food'; renderKeepBuy(); var n = $('#buy-new'); if (n) n.focus(); },
     'buy-done': function (el) {
       if (el.classList.contains('done')) return; el.classList.add('done');
       var id = attr(el, 'id');

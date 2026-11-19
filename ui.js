@@ -726,7 +726,7 @@
     BUY_KINDS.forEach(function (k) {
       var part = items.filter(function (x) { return (x.kind === 'home' ? 'home' : 'food') === k[0]; });
       if (!part.length) return;
-      h += '<p class="lbl" style="margin:12px 0 0">' + k[1] + ':</p><ul class="buylist">' +
+      h += '<h3 class="buy-head"><span>' + k[1] + '</span><em>' + part.length + '</em></h3><ul class="buylist">' +
         part.map(function (x) {
           return '<li><button type="button" class="buy-item" data-act="buy-done" data-id="' + esc(x.id) + '" aria-label="Куплено: ' + esc(x.name) + '"><i class="buy-box">' + ic('check') + '</i><span>' + esc(x.name) + '</span></button></li>';
         }).join('') + '</ul>';

@@ -90,11 +90,12 @@
   var NEW_SHOPS = ['Silpo', 'АТБ', 'Maudau', 'Інтернет магазини'];
   var NEW_SHOPS3 = ['Аврора', 'Базар'];
   var NEW_SHOPS4 = ['Fozzy', 'EVA'];
+  var NEW_SHOPS5 = ['Rozetka'];
   // Старі українські назви: записи з ними й далі рахуються за новим магазином
   var SHOP_RENAME = { 'сільпо': 'Silpo', 'маудау': 'Maudau' };
   // Адреси для комунальних: де саме платимо (два місця, де живемо, і власна квартира)
   var DEFAULT_PLACES = ['Єдності', 'Миру', 'Київська'];
-  var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'].concat(NEW_SHOPS, NEW_SHOPS3, NEW_SHOPS4);
+  var DEFAULT_SHOPS = ['Кубиха', 'Штунди', 'Штунди.Хімія', 'Центральний', 'Садовий'].concat(NEW_SHOPS, NEW_SHOPS3, NEW_SHOPS4, NEW_SHOPS5);
   function cleanShops(a) {
     var seen = {}, out = [];
     (Array.isArray(a) ? a : []).forEach(function (x) { var n = String(x == null ? '' : x).trim().replace(/\s+/g, ' ').slice(0, 30); var k = n.toLowerCase(); if (n && !seen[k] && out.length < 30) { seen[k] = 1; out.push(n); } });
@@ -271,6 +272,16 @@
         t.note = SHOP_RENAME[m] + String(t.note).trim().slice(m.length); t.updatedAt = stamp(t.updatedAt); t.dirty = true; nr++;
       });
       if (nr) { save(); scheduleSync(); }
+    }
+    // Магазин Rozetka: додаємо один раз до вже збереженого списку (порожній список не чіпаємо)
+    if (!S.meta.mShops5) {
+      S.meta.mShops5 = 1;
+      var have5 = {}; S.cfg.shops.forEach(function (n) { have5[n.toLowerCase()] = 1; });
+      var add5 = NEW_SHOPS5.filter(function (n) { return !have5[n.toLowerCase()]; });
+      if (add5.length && S.cfg.shops.length) {
+        S.cfg.shops = cleanShops(S.cfg.shops.concat(add5));
+        if (S.cfg.updatedAt === 0 && !S.cfgDirty) save(); else touchCfg();
+      } else save();
     }
     // Один раз додаємо до «Дітей» види «Канцтовари» й «Дурниці» (якщо їх там ще немає)
     if (!S.meta.mKidsSubs) {
@@ -1613,7 +1624,7 @@
     // копії
     lendSummary: lendSummary, lendMove: lendMove, lendTxs: lendTxs, exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v44', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v45', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

@@ -721,14 +721,16 @@
       '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>' +
       '<div class="seg full" role="group" aria-label="Куди додати">' + BUY_KINDS.map(function (k) { return '<button type="button" data-act="buy-kind" data-k="' + k[0] + '" aria-pressed="' + (buyKind === k[0]) + '">' + k[1] + '</button>'; }).join('') + '</div>';
     if (!items.length) return h + '<div class="empty"><b>Список порожній</b>Додайте, що треба купити. Купили: поставте галочку, і пункт зникне. У витрати й звіти ці записи не потрапляють.</div>';
+    h += '<section class="sec"><div class="sec-h"><h2>Треба купити</h2><span class="note" style="margin:0">' + items.length + '</span></div><div class="panel">';
     BUY_KINDS.forEach(function (k) {
       var part = items.filter(function (x) { return (x.kind === 'home' ? 'home' : 'food') === k[0]; });
       if (!part.length) return;
-      h += '<section class="sec"><div class="sec-h"><h2>' + k[1] + '</h2><span class="note" style="margin:0">' + part.length + '</span></div><div class="panel"><ul class="buylist">' +
+      h += '<p class="lbl" style="margin:12px 0 0">' + k[1] + ':</p><ul class="buylist">' +
         part.map(function (x) {
           return '<li><button type="button" class="buy-item" data-act="buy-done" data-id="' + esc(x.id) + '" aria-label="Куплено: ' + esc(x.name) + '"><i class="buy-box">' + ic('check') + '</i><span>' + esc(x.name) + '</span></button></li>';
-        }).join('') + '</ul></div></section>';
+        }).join('') + '</ul>';
     });
+    h += '</div></section>';
     return h;
   }
   // Перемальовуємо, не гублячи те, що вже набрано в полі

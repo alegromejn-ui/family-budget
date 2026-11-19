@@ -717,8 +717,9 @@
     var items = F.state.cfg.shopping || [];
     var h = top('Закупки', true);
     h += '<form class="buy-add" data-form="buy-add" autocomplete="off"><label class="sr" for="buy-new">Що треба купити</label>' +
-      '<textarea class="in" id="buy-new" rows="2" maxlength="2000" placeholder="Що треба купити. Можна кілька рядків із заголовками:&#10;Продукти:&#10;хліб&#10;Побут:&#10;туалетний папір"></textarea>' +
-      '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>';
+      '<input class="in" id="buy-new" maxlength="60" enterkeyhint="done" placeholder="Що треба купити, наприклад: макарони">' +
+      '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>' +
+      '<label class="field"><span>Куди додати</span><select class="in" id="buy-kind" data-change="buy-kind">' + BUY_KINDS.map(function (k) { return '<option value="' + k[0] + '"' + (buyKind === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></label>';
 
     if (!items.length) return h + '<div class="empty"><b>Список порожній</b>Додайте, що треба купити. Купили: поставте галочку, і пункт зникне. У витрати й звіти ці записи не потрапляють.</div>';
     h += '<section class="sec"><div class="sec-h"><h2>Треба купити</h2><span class="note" style="margin:0">' + items.length + '</span></div><div class="panel">';
@@ -1550,7 +1551,7 @@
       var pr = pid ? F.updatePlan(pid, pp) : F.addPlan(pp); if (pr.error) return showErr('pl-err', pr.error);
       openPlans(null, false); render(); toast(pid ? 'План змінено' : 'План додано');
     } else if (kind === 'buy-add') {
-      var br0 = F.addShopItems($('#buy-new').value, buyKind); if (br0.error) return toast(br0.error, null, null, 4000);
+      var br0 = F.addShopItems($('#buy-new').value, ($('#buy-kind') || {}).value || buyKind); if (br0.error) return toast(br0.error, null, null, 4000);
       render(); var bi = $('#buy-new'); if (bi) bi.focus();
     } else if (kind === 'goal') {
       var gid = attr(form, 'id'); var gp = { name: $('#g-name').value, target: $('#g-target').value, deadline: $('#g-deadline').value };
@@ -1620,6 +1621,7 @@
     if (kind === 'budget') { r = F.setBudget(el.value.trim() === '' ? null : el.value); if (r.error) { toast(r.error); el.value = F.state.cfg.budget ? String(F.state.cfg.budget).replace('.', ',') : ''; } render(); return; }
     if (kind === 'sub-name') { var sid = attr(el, 's'); r = F.renameSub(id, sid, el.value); if (r.error) { toast(r.error, null, null, 5000); var cur0 = F.subsOf(id).filter(function (x) { return x.id === sid; })[0]; el.value = cur0 ? cur0.name : ''; } render(); return; }
     if (kind === 'cat-name') { r = F.updateCategory(id, { name: el.value }); if (r.error) { toast(r.error, null, null, 5000); el.value = F.catById(id).name; } render(); return; }
+    if (kind === 'buy-kind') { buyKind = el.value === 'home' ? 'home' : 'food'; return; }
     if (kind === 'month-budget') { r = F.setMonthBudget(curYm, el.value.trim() === '' ? null : el.value); if (r.error) { toast(r.error); el.value = F.state.cfg.budgets[curYm] ? String(F.state.cfg.budgets[curYm]).replace('.', ',') : ''; } render(); return; }
     if (kind === 'member-limit') { var nm = el.getAttribute('data-name'); r = F.setMemberLimit(nm, el.value.trim() === '' ? null : el.value); if (r.error) { toast(r.error); el.value = F.state.cfg.memberLimits[nm] ? String(F.state.cfg.memberLimits[nm]).replace('.', ',') : ''; } render(); return; }
     if (kind === 'cat-limit') { r = F.updateCategory(id, { limit: el.value.trim() === '' ? null : el.value }); if (r.error) { toast(r.error); el.value = F.catById(id).limit ? String(F.catById(id).limit).replace('.', ',') : ''; } render(); return; }

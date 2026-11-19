@@ -717,7 +717,7 @@
     var items = F.state.cfg.shopping || [];
     var h = top('Закупки', true);
     h += '<form class="buy-add" data-form="buy-add" autocomplete="off"><label class="sr" for="buy-new">Що треба купити</label>' +
-      '<input class="in" id="buy-new" maxlength="60" enterkeyhint="done" placeholder="Що треба купити, наприклад: макарони">' +
+      '<textarea class="in" id="buy-new" rows="2" maxlength="2000" placeholder="Що треба купити. Можна кілька рядків із заголовками:&#10;Продукти:&#10;хліб&#10;Побут:&#10;туалетний папір"></textarea>' +
       '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>' +
       '<div class="seg full" role="group" aria-label="Куди додати">' + BUY_KINDS.map(function (k) { return '<button type="button" data-act="buy-kind" data-k="' + k[0] + '" aria-pressed="' + (buyKind === k[0]) + '">' + k[1] + '</button>'; }).join('') + '</div>';
     if (!items.length) return h + '<div class="empty"><b>Список порожній</b>Додайте, що треба купити. Купили: поставте галочку, і пункт зникне. У витрати й звіти ці записи не потрапляють.</div>';

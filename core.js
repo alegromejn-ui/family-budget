@@ -839,11 +839,17 @@
 
   // ---------- Закупки ----------
   function addShopItems(text, kind) {
-    var names = String(text == null ? '' : text).split(/[\n;]+|,(?!\d)/).map(function (n) { return n.replace(/\s+/g, ' ').trim().slice(0, 60); }).filter(Boolean);
-    if (!names.length) return { error: 'Введіть, що треба купити.' };
-    if (S.cfg.shopping.length + names.length > MAX_SHOPPING) return { error: 'Забагато пунктів (до ' + MAX_SHOPPING + '). Відмітьте куплене.' };
-    names.forEach(function (n) { S.cfg.shopping.push({ id: 'b_' + rid(8), name: n, kind: kind === 'home' ? 'home' : 'food' }); });
-    touchCfg(); return { added: names.length };
+    // Заголовки «Продукти:» і «Побут і господарство:» у тексті перемикають розділ для пунктів під ними
+    var cur = kind === 'home' ? 'home' : 'food', list = [];
+    String(text == null ? '' : text).split(/\n/).forEach(function (line) {
+      var m = line.match(/^\s*(продукти|побут[^:;,]*)\s*:\s*(.*)$/i);
+      if (m) { cur = /^побут/i.test(m[1]) ? 'home' : 'food'; line = m[2]; }
+      line.split(/;+|,(?!\d)/).forEach(function (n) { n = n.replace(/\s+/g, ' ').trim().slice(0, 60); if (n) list.push({ name: n, kind: cur }); });
+    });
+    if (!list.length) return { error: 'Введіть, що треба купити.' };
+    if (S.cfg.shopping.length + list.length > MAX_SHOPPING) return { error: 'Забагато пунктів (до ' + MAX_SHOPPING + '). Відмітьте куплене.' };
+    list.forEach(function (x) { S.cfg.shopping.push({ id: 'b_' + rid(8), name: x.name, kind: x.kind }); });
+    touchCfg(); return { added: list.length };
   }
   function removeShopItem(id) {
     var i = -1; S.cfg.shopping.forEach(function (x, k) { if (x.id === id) i = k; });
@@ -1624,7 +1630,7 @@
     // копії
     lendSummary: lendSummary, lendMove: lendMove, lendTxs: lendTxs, exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v47', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v48', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

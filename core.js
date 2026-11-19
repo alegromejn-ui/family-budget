@@ -150,7 +150,7 @@
       var id = String(x.id == null ? '' : x.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
       var name = String(x.name == null ? '' : x.name).replace(/\s+/g, ' ').trim().slice(0, 60);
       if (!id || ids[id] || !name) return;
-      ids[id] = 1; out.push({ id: id, name: name, kind: x.kind === 'home' ? 'home' : 'food' });
+      ids[id] = 1; out.push({ id: id, name: name, kind: x.kind === 'home' ? 'home' : x.kind === 'food' ? 'food' : '' });
     });
     return out;
   }
@@ -169,8 +169,17 @@
     (remote.shopGone || []).concat(local.shopGone || []).forEach(function (g) { if (!gone[g.id] || g.at > gone[g.id]) gone[g.id] = g.at; });
     Object.keys(gone).forEach(function (id) { goneList.push({ id: id, at: gone[id] }); });
     var seen = {}, items = [];
-    (remote.shopping || []).concat(local.shopping || []).forEach(function (x) { if (!gone[x.id] && !seen[x.id]) { seen[x.id] = 1; items.push({ id: x.id, name: x.name, kind: x.kind === 'home' ? 'home' : 'food' }); } });
+    (remote.shopping || []).concat(local.shopping || []).forEach(function (x) {
+      if (gone[x.id]) return;
+      if (!seen[x.id]) { seen[x.id] = 1; items.push({ id: x.id, name: x.name, kind: x.kind || '' }); }
+      else if (x.kind) items.forEach(function (y) { if (y.id === x.id && !y.kind) y.kind = x.kind; });
+    });
     return { shopping: items.slice(0, MAX_SHOPPING), shopGone: cleanGone(goneList) };
+  }
+  // Телефон зі старою версією не знає про групи й надсилає закупки без них: розділ, який ми вже вибрали, не губимо
+  function inheritKinds(remoteCfg, localCfg) {
+    var known = {}; (localCfg.shopping || []).forEach(function (x) { if (x.kind) known[x.id] = x.kind; });
+    (remoteCfg.shopping || []).forEach(function (x) { if (!x.kind && known[x.id]) x.kind = known[x.id]; });
   }
   function normalizeCfg(c) {
     var d = defaultCfg();
@@ -1256,7 +1265,7 @@
         var remoteU = Number(data.config.updatedAt) || 0;
         try {
           var parsed = JSON.parse(data.config.json); parsed.updatedAt = remoteU; var remoteCfg = normalizeCfg(parsed);
-          if (!S.cfgDirty) { S.cfg = remoteCfg; S.cfgBase = remoteU; repairSplitCats(); migrateClothesV5(false); migrateLendV6(); }
+          if (!S.cfgDirty) { inheritKinds(remoteCfg, S.cfg); S.cfg = remoteCfg; S.cfgBase = remoteU; repairSplitCats(); migrateClothesV5(false); migrateLendV6(); }
           else {
             // На сервері вже є чужа версія, а в нас є ще не надіслані правки: список закупок зливаємо, решту бере новіша версія
             var m = mergeShopping(remoteCfg, S.cfg);
@@ -1630,7 +1639,7 @@
     // копії
     lendSummary: lendSummary, lendMove: lendMove, lendTxs: lendTxs, exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v51', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v52', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

@@ -711,17 +711,24 @@
   }
 
   // ---------- Закупки ----------
+  var buyKind = 'food';
+  var BUY_KINDS = [['food', 'Продукти'], ['home', 'Побут і господарство']];
   function viewShopping() {
     var items = F.state.cfg.shopping || [];
     var h = top('Закупки', true);
     h += '<form class="buy-add" data-form="buy-add" autocomplete="off"><label class="sr" for="buy-new">Що треба купити</label>' +
       '<input class="in" id="buy-new" maxlength="60" enterkeyhint="done" placeholder="Що треба купити, наприклад: макарони">' +
-      '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>';
+      '<button class="btn sm" type="submit" aria-label="Додати до списку">' + ic('plus') + '</button></form>' +
+      '<div class="seg full" role="group" aria-label="Куди додати">' + BUY_KINDS.map(function (k) { return '<button type="button" data-act="buy-kind" data-k="' + k[0] + '" aria-pressed="' + (buyKind === k[0]) + '">' + k[1] + '</button>'; }).join('') + '</div>';
     if (!items.length) return h + '<div class="empty"><b>Список порожній</b>Додайте, що треба купити. Купили: поставте галочку, і пункт зникне. У витрати й звіти ці записи не потрапляють.</div>';
-    h += '<section class="sec"><div class="sec-h"><h2>Треба купити</h2><span class="note" style="margin:0">' + items.length + '</span></div><div class="panel"><ul class="buylist">' +
-      items.map(function (x) {
-        return '<li><button type="button" class="buy-item" data-act="buy-done" data-id="' + esc(x.id) + '" aria-label="Куплено: ' + esc(x.name) + '"><i class="buy-box">' + ic('check') + '</i><span>' + esc(x.name) + '</span></button></li>';
-      }).join('') + '</ul></div></section>';
+    BUY_KINDS.forEach(function (k) {
+      var part = items.filter(function (x) { return (x.kind === 'home' ? 'home' : 'food') === k[0]; });
+      if (!part.length) return;
+      h += '<section class="sec"><div class="sec-h"><h2>' + k[1] + '</h2><span class="note" style="margin:0">' + part.length + '</span></div><div class="panel"><ul class="buylist">' +
+        part.map(function (x) {
+          return '<li><button type="button" class="buy-item" data-act="buy-done" data-id="' + esc(x.id) + '" aria-label="Куплено: ' + esc(x.name) + '"><i class="buy-box">' + ic('check') + '</i><span>' + esc(x.name) + '</span></button></li>';
+        }).join('') + '</ul></div></section>';
+    });
     return h;
   }
   // Перемальовуємо, не гублячи те, що вже набрано в полі
@@ -1420,6 +1427,7 @@
     'goal-edit': function (el) { openGoals(attr(el, 'id'), false); var f = $('#g-name'); if (f) f.focus(); },
     'goal-cancel': function () { openGoals(null, true); },
     'goal-del': function (el) { if (confirm('Видалити ціль? Уже записані внески лишаться в історії.')) { F.removeGoal(attr(el, 'id')); openGoals(null, true); render(); } },
+    'buy-kind': function (el) { buyKind = attr(el, 'k') === 'home' ? 'home' : 'food'; renderKeepBuy(); var n = $('#buy-new'); if (n) n.focus(); },
     'buy-done': function (el) {
       if (el.classList.contains('done')) return; el.classList.add('done');
       var id = attr(el, 'id');
@@ -1541,7 +1549,7 @@
       var pr = pid ? F.updatePlan(pid, pp) : F.addPlan(pp); if (pr.error) return showErr('pl-err', pr.error);
       openPlans(null, false); render(); toast(pid ? 'План змінено' : 'План додано');
     } else if (kind === 'buy-add') {
-      var br0 = F.addShopItems($('#buy-new').value); if (br0.error) return toast(br0.error, null, null, 4000);
+      var br0 = F.addShopItems($('#buy-new').value, buyKind); if (br0.error) return toast(br0.error, null, null, 4000);
       render(); var bi = $('#buy-new'); if (bi) bi.focus();
     } else if (kind === 'goal') {
       var gid = attr(form, 'id'); var gp = { name: $('#g-name').value, target: $('#g-target').value, deadline: $('#g-deadline').value };

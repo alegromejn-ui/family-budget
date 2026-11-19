@@ -150,7 +150,7 @@
       var id = String(x.id == null ? '' : x.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
       var name = String(x.name == null ? '' : x.name).replace(/\s+/g, ' ').trim().slice(0, 60);
       if (!id || ids[id] || !name) return;
-      ids[id] = 1; out.push({ id: id, name: name });
+      ids[id] = 1; out.push({ id: id, name: name, kind: x.kind === 'home' ? 'home' : 'food' });
     });
     return out;
   }
@@ -169,7 +169,7 @@
     (remote.shopGone || []).concat(local.shopGone || []).forEach(function (g) { if (!gone[g.id] || g.at > gone[g.id]) gone[g.id] = g.at; });
     Object.keys(gone).forEach(function (id) { goneList.push({ id: id, at: gone[id] }); });
     var seen = {}, items = [];
-    (remote.shopping || []).concat(local.shopping || []).forEach(function (x) { if (!gone[x.id] && !seen[x.id]) { seen[x.id] = 1; items.push({ id: x.id, name: x.name }); } });
+    (remote.shopping || []).concat(local.shopping || []).forEach(function (x) { if (!gone[x.id] && !seen[x.id]) { seen[x.id] = 1; items.push({ id: x.id, name: x.name, kind: x.kind === 'home' ? 'home' : 'food' }); } });
     return { shopping: items.slice(0, MAX_SHOPPING), shopGone: cleanGone(goneList) };
   }
   function normalizeCfg(c) {
@@ -838,11 +838,11 @@
   }
 
   // ---------- Закупки ----------
-  function addShopItems(text) {
+  function addShopItems(text, kind) {
     var names = String(text == null ? '' : text).split(/[\n;]+|,(?!\d)/).map(function (n) { return n.replace(/\s+/g, ' ').trim().slice(0, 60); }).filter(Boolean);
     if (!names.length) return { error: 'Введіть, що треба купити.' };
     if (S.cfg.shopping.length + names.length > MAX_SHOPPING) return { error: 'Забагато пунктів (до ' + MAX_SHOPPING + '). Відмітьте куплене.' };
-    names.forEach(function (n) { S.cfg.shopping.push({ id: 'b_' + rid(8), name: n }); });
+    names.forEach(function (n) { S.cfg.shopping.push({ id: 'b_' + rid(8), name: n, kind: kind === 'home' ? 'home' : 'food' }); });
     touchCfg(); return { added: names.length };
   }
   function removeShopItem(id) {
@@ -1624,7 +1624,7 @@
     // копії
     lendSummary: lendSummary, lendMove: lendMove, lendTxs: lendTxs, exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v45', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v46', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

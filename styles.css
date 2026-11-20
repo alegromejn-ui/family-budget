@@ -477,3 +477,6 @@ button.chip[data-act="sub"], button.chip[data-act="shop"] { -webkit-touch-callou
 .visit-body .txrow { min-height: 52px; }
 .visit-body .txrow .cico { width: 34px; height: 34px; border-radius: 11px; }
 .visit-body .txrow .cico .ic { width: 17px; height: 17px; }
+
+/* Подвійний дотик не збільшує екран (наприклад, на екрані PIN-коду); щипок двома пальцями працює як раніше */
+html, body, button, a, input, select, textarea, label, [data-act] { touch-action: manipulation; }

@@ -691,8 +691,11 @@
   function liveTxs() { return allLive().filter(function (t) { return kindOf(t) === 'expense'; }); }
   function monthTxs(ym) { return liveTxs().filter(function (t) { return ymOf(t.date) === ym; }).sort(byDateDesc); }
   function monthKind(ym, kind) { return allLive().filter(function (t) { return kindOf(t) === kind && ymOf(t.date) === ym; }).sort(byDateDesc); }
+  // Одна людина, але на різних телефонах записана по-різному: у підсумках «Наталія» рахуємо як «Наташа»
+  var MEMBER_ALIAS = { 'наталія': 'Наташа', 'наталья': 'Наташа', 'natalia': 'Наташа', 'natalie': 'Наташа', 'natasha': 'Наташа' };
+  function canonMember(n) { var k = String(n == null ? '' : n).trim(); return MEMBER_ALIAS[k.toLowerCase()] || k; }
   function members() {
-    var set = {}; allLive().forEach(function (t) { if (t.member) set[t.member] = 1; }); if (S.me.name) set[S.me.name] = 1; return Object.keys(set).sort();
+    var set = {}; allLive().forEach(function (t) { if (t.member) set[canonMember(t.member)] = 1; }); if (S.me.name) set[canonMember(S.me.name)] = 1; return Object.keys(set).sort();
   }
   function sum(list) { return round2(list.reduce(function (s, t) { return s + t.amount; }, 0)); }
   function spentByCategory(ym) {
@@ -744,7 +747,7 @@
     return { items: items, none: none, total: round2(none.total + items.reduce(function (t, x) { return t + x.total; }, 0)) };
   }
   function byMember(ym) {
-    var m = {}; monthTxs(ym).forEach(function (t) { var k = t.member || 'Без імені'; m[k] = round2((m[k] || 0) + t.amount); });
+    var m = {}; monthTxs(ym).forEach(function (t) { var k = canonMember(t.member) || 'Без імені'; m[k] = round2((m[k] || 0) + t.amount); });
     return Object.keys(m).map(function (k) { return { name: k, total: m[k] }; }).sort(function (a, b) { return b.total - a.total; });
   }
   // Витрати місяця за картками; записи без картки (старі) окремо
@@ -1639,7 +1642,7 @@
     // копії
     lendSummary: lendSummary, lendMove: lendMove, lendTxs: lendTxs, exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV,
     // чеки
-    geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v53', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
+    canonMember: canonMember, geminiKey: geminiKey, keySource: keySource, scanReceipt: scanReceipt, testKey: testKey, askAI: askAI, aiContext: aiContext, aiPayload: aiPayload, AI_DEFAULT_Q: AI_DEFAULT_Q, VERSION: 'v54', describeGeminiError: describeGeminiError, receiptPayload: receiptPayload, readReceiptResponse: readReceiptResponse,
     // пристрій
     setName: setName, setGeminiKey: setGeminiKey, finishOnboarding: finishOnboarding, save: save
   };

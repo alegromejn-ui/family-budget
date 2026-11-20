@@ -652,7 +652,7 @@
           return '<li><span class="lrow"><span class="name"><b>' + esc(g.name || 'Без нотатки') + '</b></span><span class="lead"></span><span class="val num">' + money(g.total) + '</span></span><span class="status">' + g.count + ' ' + plural(g.count, 'покупка', 'покупки', 'покупок') + (total > 0 ? ', ' + Math.round(g.total / total * 100) + '%' : '') + '</span></li>';
         }).join('') + '</ul></div></section>';
       }
-      var mem = {}; list.forEach(function (t) { var k = t.member || 'Без імені'; mem[k] = F.round2((mem[k] || 0) + t.amount); });
+      var mem = {}; list.forEach(function (t) { var k = F.canonMember(t.member) || 'Без імені'; mem[k] = F.round2((mem[k] || 0) + t.amount); });
       var mems = Object.keys(mem).map(function (k) { return { name: k, value: mem[k] }; }).sort(function (a, b) { return b.value - a.value; });
       if (mems.length > 1) {
         h += '<section class="sec"><div class="sec-h"><h2>Хто витратив</h2></div><div class="panel">' + barRows(mems.map(function (m, i) { return { name: m.name, value: m.value, cls: 'c' + (i % F.MAX_COLORED), dot: '<i class="dot c' + (i % F.MAX_COLORED) + '" aria-hidden="true"></i>' }; }), total) + '</div></section>';

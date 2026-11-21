@@ -12,7 +12,7 @@
     ['fozzy', /^(fozzy|фоззі|фози)/i, 'F', '#F0323A', '#C81D26', '#fff', 'grocery'],
     ['eva', /^eva\b|^єва\b|^ева\b/i, 'EVA', '#12B76A', '#0A8F50', '#fff', 'drugstore'],
     ['avrora', /^(аврора|avrora)/i, 'А', '#FFD400', '#FFC000', '#E3001B', 'shop'],
-    ['fayno', /^(файно|fayno)/i, 'Ф', '#F59E0B', '#D97706', '#fff', 'grocery'],
+    ['fayno', /^(файно|fayno)/i, 'Ф', '#16A34A', '#0F7A35', '#fff', 'grocery'],
     ['novus', /^(novus|новус)/i, 'N', '#E5322D', '#B91F1B', '#fff', 'grocery'],
     ['varus', /^(varus|варус)/i, 'V', '#2FA84F', '#1F8438', '#fff', 'grocery'],
     ['metro', /^(metro|метро)\b/i, 'M', '#1A4E9C', '#0E3470', '#FFD100', 'grocery'],
